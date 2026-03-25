@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Statistik — Typing Battle</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: #0f0f1a; color: #e0e0f0; min-height: 100vh; padding: 24px;
+        }
+        h1 { font-size: 2rem; color: #7c6af7; text-align: center; margin-bottom: 6px; }
+        .subtitle { text-align: center; color: #888; margin-bottom: 32px; font-size: 0.9rem; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1100px; margin: 0 auto; }
+        @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+        .card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px; padding: 20px;
+        }
+        .card h2 { font-size: 1rem; color: #a78bfa; margin-bottom: 14px; text-transform: uppercase; letter-spacing: .05em; }
+        canvas { max-height: 280px; }
+        /* Leaderboard */
+        table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+        th, td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.07); text-align: left; }
+        th { color: #888; font-size: 0.75rem; text-transform: uppercase; }
+        tr:first-child td { color: #fbbf24; font-weight: 700; }
+        tr:nth-child(2) td { color: #9ca3af; }
+        tr:nth-child(3) td { color: #cd7c3a; }
+        /* Analysis */
+        .analysis { font-size: 0.88rem; line-height: 1.7; color: #ccc; }
+        .analysis .ok   { color: #4ade80; }
+        .analysis .warn { color: #f87171; }
+        .btn-row { text-align: center; margin: 20px 0; }
+        button {
+            padding: 10px 22px; background: #7c6af7;
+            border: none; border-radius: 8px; color: #fff;
+            font-size: 0.9rem; cursor: pointer;
+        }
+        button:hover { background: #6455d4; }
+        a.back { color: #a78bfa; text-decoration: none; font-size: 0.85rem; display: block; text-align: center; margin-top: 24px; }
+    </style>
+</head>
+<body>
+<h1>📊 Dashboard Statistik</h1>
+<p class="subtitle">Data dari sesi permainan tersimpan di browser</p>
+
+<div class="btn-row">
+    <button onclick="loadData()">🔄 Refresh Data</button>
+    <button onclick="clearData()" style="background:#ef4444;margin-left:10px;">🗑️ Hapus Data</button>
+</div>
+
+<div class="grid">
+    <!-- Grafik 1: Tren WPM per Ronde -->
+    <div class="card">
+        <h2>📈 Tren WPM per Ronde (5 Sesi Terakhir)</h2>
+        <canvas id="chart-wpm-trend"></canvas>
+    </div>
+
+    <!-- Grafik 2: Ronde 1 vs Ronde Terakhir -->
+    <div class="card">
+        <h2>🥊 Ronde Pertama vs Terakhir</h2>
+        <canvas id="chart-first-vs-last"></canvas>
+    </div>
+
+    <!-- Grafik 3: Distribusi Error Rate -->
+    <div class="card">
+        <h2>❌ Distribusi Error Rate (%)</h2>
+        <canvas id="chart-error-dist"></canvas>
+    </div>
+
+    <!-- Grafik 4: Konsistensi WPM per Sesi -->
+    <div class="card">
+        <h2>🎯 Konsistensi WPM per Sesi</h2>
+        <canvas id="chart-consistency"></canvas>
+    </div>
+
+    <!-- Leaderboard -->
+    <div class="card">
+        <h2>🏆 Leaderboard (dari Server)</h2>
+        <div id="leaderboard-area">
+            <p style="color:#888;font-size:.85rem;">Memuat data dari server...</p>
+        </div>
+    </div>
+
+    <!-- Analisis Teks -->
+    <div class="card">
+        <h2>🔍 Analisis Performa</h2>
+        <div class="analysis" id="analysis-area">
+            <p>Belum ada data. Mainkan dulu lalu klik Refresh.</p>
+        </div>
+    </div>
+</div>
+
+<a class="back" href="index.html">← Kembali ke Game</a>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// Config
+// ══════════════════════════════════════════════════════════
+const SERVER_URL = 'ws://localhost:8080'; // Ganti saat deploy Railway
+const COLORS = ['#7c6af7','#4ade80','#f87171','#fbbf24','#38bdf8'];
+
+let charts = {};
+
+// ══════════════════════════════════════════════════════════
+// Load Data
+// ══════════════════════════════════════════════════════════
+function loadData() {
+    const raw = localStorage.getItem('typingBattle_sessions');
+    const sessions = raw ? JSON.parse(raw) : [];
+
+    if (sessions.length === 0) {
+        document.getElementById('analysis-area').innerHTML =
+            '<p>Belum ada data sesi. Mainkan game dulu!</p>';
+        return;
+    }
+
+    drawWpmTrend(sessions);
+    drawFirstVsLast(sessions);
+    drawErrorDist(sessions);
+    drawConsistency(sessions);
+    drawAnalysis(sessions);
+    fetchLeaderboard();
+}
+
+// ── Grafik 1: Tren WPM per Ronde ──────────────────────────
+function drawWpmTrend(sessions) {
+    const last5 = sessions.slice(-5);
+    const labels = ['Ronde 1','Ronde 2','Ronde 3','Ronde 4','Ronde 5'];
+    const datasets = [];
+
+    // Kumpulkan semua username unik
+    const allUsers = new Set();
+    last5.forEach(s => s.players.forEach(p => allUsers.add(p.username)));
+
+    allUsers.forEach((username, idx) => {
+        const wpmPerRound = [null,null,null,null,null];
+        last5.forEach(session => {
+            const player = session.players.find(p => p.username === username);
+            if (player && player.roundHistory) {
+                player.roundHistory.forEach(r => {
+                    wpmPerRound[r.round - 1] = r.wpm;
+                });
+            }
+        });
+        datasets.push({
+            label: username,
+            data: wpmPerRound,
+            borderColor: COLORS[idx % COLORS.length],
+            backgroundColor: 'transparent',
+            tension: 0.3,
+        });
+    });
+
+    destroyChart('wpm-trend');
+    charts['wpm-trend'] = new Chart(document.getElementById('chart-wpm-trend'), {
+        type: 'line',
+        data: { labels, datasets },
+        options: { responsive: true, plugins: { legend: { labels: { color: '#ccc' } } },
+            scales: { x: { ticks: { color: '#888' } }, y: { ticks: { color: '#888' }, beginAtZero: true } } }
+    });
+}
+
+// ── Grafik 2: Ronde Pertama vs Terakhir ───────────────────
+function drawFirstVsLast(sessions) {
+    const latest = sessions[sessions.length - 1];
+    if (!latest) return;
+
+    const labels = latest.players.map(p => p.username);
+    const firstWpm = latest.players.map(p => p.roundHistory?.[0]?.wpm ?? 0);
+    const lastWpm  = latest.players.map(p => {
+        const h = p.roundHistory;
+        return h?.length ? h[h.length - 1].wpm : 0;
+    });
+
+    destroyChart('first-vs-last');
+    charts['first-vs-last'] = new Chart(document.getElementById('chart-first-vs-last'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                { label: 'Ronde 1',     data: firstWpm, backgroundColor: '#7c6af7' },
+                { label: 'Ronde Akhir', data: lastWpm,  backgroundColor: '#4ade80' },
+            ]
+        },
+        options: { responsive: true, plugins: { legend: { labels: { color: '#ccc' } } },
+            scales: { x: { ticks: { color: '#888' } }, y: { ticks: { color: '#888' }, beginAtZero: true } } }
+    });
+}
+
+// ── Grafik 3: Distribusi Error Rate ───────────────────────
+function drawErrorDist(sessions) {
+    const buckets = { '0-2%': 0, '2-5%': 0, '5-10%': 0, '>10%': 0 };
+    sessions.forEach(s => {
+        s.players.forEach(p => {
+            (p.roundHistory || []).forEach(r => {
+                const e = r.errorRate;
+                if (e <= 2) buckets['0-2%']++;
+                else if (e <= 5) buckets['2-5%']++;
+                else if (e <= 10) buckets['5-10%']++;
+                else buckets['>10%']++;
+            });
+        });
+    });
+
+    destroyChart('error-dist');
+    charts['error-dist'] = new Chart(document.getElementById('chart-error-dist'), {
+        type: 'bar',
+        data: {
+            labels: Object.keys(buckets),
+            datasets: [{ label: 'Jumlah Ronde', data: Object.values(buckets),
+                backgroundColor: ['#4ade80','#fbbf24','#f87171','#ef4444'] }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } },
+            scales: { x: { ticks: { color: '#888' } }, y: { ticks: { color: '#888' }, beginAtZero: true } } }
+    });
+}
+
+// ── Grafik 4: Konsistensi (Max - Min WPM per sesi) ────────
+function drawConsistency(sessions) {
+    const labels = sessions.slice(-5).map((_, i) => `Sesi ${i + 1}`);
+    const allUsers = new Set();
+    sessions.slice(-5).forEach(s => s.players.forEach(p => allUsers.add(p.username)));
+
+    const datasets = [];
+    allUsers.forEach((username, idx) => {
+        const values = sessions.slice(-5).map(s => {
+            const player = s.players.find(p => p.username === username);
+            if (!player || !player.roundHistory?.length) return 0;
+            const wpms = player.roundHistory.map(r => r.wpm);
+            return parseFloat((Math.max(...wpms) - Math.min(...wpms)).toFixed(1));
+        });
+        datasets.push({
+            label: username,
+            data: values,
+            backgroundColor: COLORS[idx % COLORS.length],
+        });
+    });
+
+    destroyChart('consistency');
+    charts['consistency'] = new Chart(document.getElementById('chart-consistency'), {
+        type: 'bar',
+        data: { labels, datasets },
+        options: { responsive: true, plugins: { legend: { labels: { color: '#ccc' } } },
+            scales: { x: { ticks: { color: '#888' } },
+                y: { ticks: { color: '#888' }, beginAtZero: true, title: { display: true, text: 'Selisih WPM (max-min)', color: '#888' } } } }
+    });
+}
+
+// ── Analisis Teks ─────────────────────────────────────────
+function drawAnalysis(sessions) {
+    const el = document.getElementById('analysis-area');
+    if (!sessions.length) { el.innerHTML = '<p>Tidak ada data.</p>'; return; }
+
+    const allUsers = new Set();
+    sessions.forEach(s => s.players.forEach(p => allUsers.add(p.username)));
+
+    let html = '';
+    allUsers.forEach(username => {
+        const userSessions = sessions
+            .map(s => s.players.find(p => p.username === username))
+            .filter(Boolean);
+
+        if (!userSessions.length) return;
+
+        // WPM dalam sesi terakhir (ronde 1 → ronde terakhir)
+        const latestSession = userSessions[userSessions.length - 1];
+        const hist = latestSession.roundHistory || [];
+        const wpmImproved = hist.length >= 2 && hist[hist.length - 1].wpm > hist[0].wpm;
+        const errImproved = hist.length >= 2 && hist[hist.length - 1].errorRate < hist[0].errorRate;
+
+        // WPM antar sesi
+        const avgWpms = userSessions.map(s => s.avgWpm || 0);
+        const crossSessionImproved = avgWpms.length >= 2 && avgWpms[avgWpms.length - 1] > avgWpms[0];
+
+        html += `<strong style="color:#a78bfa">${username}</strong><br>`;
+        html += `• WPM ronde 1→akhir (sesi ini): <span class="${wpmImproved ? 'ok' : 'warn'}">${wpmImproved ? '✅ Meningkat' : '⚠️ Tidak meningkat'}</span><br>`;
+        html += `• WPM antar sesi: <span class="${crossSessionImproved ? 'ok' : 'warn'}">${crossSessionImproved ? '✅ Meningkat' : '⚠️ Tidak meningkat'}</span><br>`;
+        html += `• Error rate ronde 1→akhir: <span class="${errImproved ? 'ok' : 'warn'}">${errImproved ? '✅ Menurun' : '⚠️ Tidak menurun'}</span><br><br>`;
+    });
+
+    el.innerHTML = html || '<p>Tidak ada data yang cukup.</p>';
+}
+
+// ── Leaderboard dari Server ───────────────────────────────
+function fetchLeaderboard() {
+    const area = document.getElementById('leaderboard-area');
+    try {
+        const socket = new WebSocket(SERVER_URL);
+        socket.onopen = () => socket.send(JSON.stringify({ type: 'get_leaderboard' }));
+        socket.onmessage = (ev) => {
+            const data = JSON.parse(ev.data);
+            if (data.type === 'LEADERBOARD') {
+                renderLeaderboard(data.data);
+                socket.close();
+            }
+        };
+        socket.onerror = () => {
+            area.innerHTML = '<p style="color:#888;font-size:.85rem;">Server tidak tersedia. Gunakan data lokal.</p>';
+        };
+        setTimeout(() => { if (socket.readyState !== WebSocket.CLOSED) socket.close(); }, 3000);
+    } catch (e) {
+        area.innerHTML = '<p style="color:#888;font-size:.85rem;">Tidak bisa konek ke server.</p>';
+    }
+}
+
+function renderLeaderboard(rows) {
+    const area = document.getElementById('leaderboard-area');
+    if (!rows || !rows.length) {
+        area.innerHTML = '<p style="color:#888;font-size:.85rem;">Belum ada data leaderboard.</p>';
+        return;
+    }
+    let html = '<table><thead><tr><th>#</th><th>Username</th><th>Skor</th><th>Best WPM</th><th>Sesi</th></tr></thead><tbody>';
+    rows.forEach((r, i) => {
+        html += `<tr><td>${i+1}</td><td>${r.username}</td><td>${r.total_score}</td><td>${r.best_wpm ?? '-'}</td><td>${r.sessions_played}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    area.innerHTML = html;
+}
+
+// ── Helpers ───────────────────────────────────────────────
+function destroyChart(key) {
+    if (charts[key]) { charts[key].destroy(); delete charts[key]; }
+}
+
+function clearData() {
+    if (confirm('Hapus semua data sesi dari browser?')) {
+        localStorage.removeItem('typingBattle_sessions');
+        location.reload();
+    }
+}
+
+// Auto-load
+loadData();
+</script>
+</body>
+</html>
