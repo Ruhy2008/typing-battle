@@ -237,6 +237,9 @@
 
     function saveSessionData(standings) {
         try {
+            // ─── FITUR BARU: INGAT NAMA PEMILIK LAPTOP INI ───
+            localStorage.setItem('typingBattle_lastUser', myUsername);
+            
             const raw = localStorage.getItem('typingBattle_sessions');
             const sessions = raw ? JSON.parse(raw) : [];
             const newSession = {
