@@ -11,43 +11,36 @@
     const $$ = (sel) => document.querySelectorAll(sel);
 
     const DOM = {
-        // Screens
         screenLobby:       $('#lobby-screen'),
         screenGame:        $('#game-screen'),
         screenResult:      $('#result-screen'),
         screenFinal:       $('#final-screen'),
 
-        // Lobby Inputs
         inputUsername:     $('#username-input'),
         btnJoinMulti:      $('#join-multi-btn'),
         btnJoinSolo:       $('#join-solo-btn'),
         
-        // Lobby List & Status
         playerListContainer:$('#player-list-container'),
         playerCount:       $('#player-count'),
         playerList:        $('#player-list'),
         statusText:        $('#status-text'),
         btnStartManual:    $('#start-btn'),
 
-        // Game Arena
         hudRound:          $('#round-indicator'),
         hudTimer:          $('#timer-display'),
         hudWpm:            $('#wpm-display'),
         sentenceDisplay:   $('#sentence-display'),
         typingInput:       $('#typing-input'),
         
-        // Progress Bars
         myProgressRow:     $('#my-progress-row'),
         myProgressLabel:   $('#my-progress-label'),
         myProgressBar:     $('#my-progress'),
         opponentsProgress: $('#opponents-progress'),
 
-        // Tables
         resultTableBody:   $('#result-table-body'),
         finalTableBody:    $('#final-table-body'),
     };
 
-    // ─── STATE ───────────────────────────────────────
     let ws = null;
     let myUsername = '';
     let currentSentence = '';
@@ -56,13 +49,9 @@
     // ─── WEBSOCKET CONNECTION ────────────────────────
     function connect() {
         ws = new WebSocket(WS_URL);
-
         ws.onopen = () => console.log('[WS] Terhubung ke Server');
-        ws.onclose = () => {
-            console.log('[WS] Terputus. Mencoba reconnect...');
-            setTimeout(connect, 3000);
-        };
-        ws.onerror = () => alert('Gagal terhubung ke server WebSocket!');
+        ws.onclose = () => setTimeout(connect, 3000);
+        ws.onerror = () => console.error('[WS] Error koneksi');
 
         ws.onmessage = (event) => {
             let data;
@@ -77,18 +66,11 @@
         }
     }
 
-    // ─── MESSAGE ROUTER ──────────────────────────────
     function handleMessage(data) {
         switch (data.type) {
-            case 'GAME_STATE':    
-                onGameState(data);       
-                break;
-            case 'START_GAME':    
-                onStartGame(data);       
-                break;
-            case 'GAME_OVER_STATS': 
-                onGameOver(data); 
-                break;
+            case 'GAME_STATE':    onGameState(data);       break;
+            case 'START_GAME':    onStartGame(data);       break;
+            case 'GAME_OVER_STATS': onGameOver(data);      break;
         }
     }
 
@@ -101,14 +83,18 @@
             DOM.playerListContainer.classList.remove('hidden');
             DOM.playerCount.textContent = `(${players.length}/5)`;
             
-            // Render list pemain
-            DOM.playerList.innerHTML = players.map(p => 
-                `<li class="${p.username === myUsername ? 'me' : ''}">
-                    ${p.username === myUsername ? '👉 ' : '👤 '} ${escapeHtml(p.username)}
-                </li>`
-            ).join('');
+            // Render list pemain (Dengan Try-Catch Anti-Crash)
+            try {
+                DOM.playerList.innerHTML = players.map(p => 
+                    `<li class="${p.username === myUsername ? 'me' : ''}">
+                        ${p.username === myUsername ? '👉 ' : '👤 '} ${escapeHtml(p.username)}
+                    </li>`
+                ).join('');
+            } catch(e) {
+                console.error("Gagal render daftar nama:", e);
+            }
 
-            // LOGIKA TOMBOL MULAI: Solo = 1 orang cukup. Multi = min 2 orang.
+            // LOGIKA TOMBOL MULAI
             const isReadyToStart = (data.mode === 'solo') || (players.length >= 2);
             
             if (isReadyToStart) {
@@ -124,7 +110,6 @@
         if (data.phase === 'playing') {
             if (data.waktu !== undefined) {
                 DOM.hudTimer.textContent = data.waktu;
-                // UI Tweak: Merah saat waktu mau habis
                 if (data.waktu <= 5) DOM.hudTimer.parentElement.style.color = 'var(--accent-pink)';
                 else DOM.hudTimer.parentElement.style.color = '#fff';
             }
@@ -136,7 +121,6 @@
         currentSentence = data.kalimat || '';
         isFinished = false;
 
-        // Persiapan UI Game
         DOM.typingInput.value = '';
         DOM.typingInput.disabled = false;
         DOM.hudTimer.textContent = '60';
@@ -150,8 +134,8 @@
 
     function onGameOver(data) {
         DOM.typingInput.disabled = true;
-        
         const standings = data.finalStandings || [];
+        
         DOM.finalTableBody.innerHTML = standings.map((s, i) => {
             const rank = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
             return `<tr>
@@ -164,16 +148,13 @@
             </tr>`;
         }).join('');
 
-        // Simpan data untuk Dashboard Reaction Duel
         saveSessionData(standings);
-
         showScreen(DOM.screenFinal);
     }
 
     // ─── UI RENDERING ────────────────────────────────
     function renderPlayerProgress(players) {
         let opponentsHtml = '';
-        
         players.forEach(p => {
             const pct = Math.min(100, Math.round(p.progress));
             const wpm = p.wpm ? Math.round(p.wpm) : 0;
@@ -204,9 +185,9 @@
     function renderSentence(typed, sentence) {
         let html = '';
         for (let i = 0; i < sentence.length; i++) {
-            const ch = sentence[i];
+            const ch = sentence[i] === ' ' ? '&nbsp;' : escapeHtml(sentence[i]);
             if (i < typed.length) {
-                if (typed[i] === ch) html += `<span class="correct">${ch}</span>`;
+                if (typed[i] === sentence[i]) html += `<span class="correct">${ch}</span>`;
                 else html += `<span class="wrong">${ch}</span>`;
             } else {
                 html += `<span>${ch}</span>`;
@@ -224,7 +205,6 @@
         }
         myUsername = username;
         
-        // Kunci input agar tidak diklik dua kali
         DOM.inputUsername.disabled = true;
         DOM.btnJoinMulti.disabled = true;
         DOM.btnJoinSolo.disabled = true;
@@ -244,45 +224,47 @@
         screenEl.classList.remove('hidden');
     }
 
-    // ─── SIMPAN DATA UNTUK DASHBOARD ─────────────────
     function saveSessionData(standings) {
         try {
             const raw = localStorage.getItem('typingBattle_sessions');
             const sessions = raw ? JSON.parse(raw) : [];
-            
-            // Format agar sesuai dengan struktur "Reaction Duel Dashboard"
             const newSession = {
                 timestamp: Date.now(),
                 players: standings.map(s => ({
                     username: s.username,
                     avgWpm: s.avgWpm,
-                    // Karena kita pakai array roundHistory di dashboard, kita buat simulasi ronde
-                    roundHistory: [
-                        { round: 1, wpm: s.bestWpm, errorRate: 100 - s.avgAccuracy }
-                    ]
+                    roundHistory: [{ round: 1, wpm: s.bestWpm, errorRate: 100 - s.avgAccuracy }]
                 }))
             };
-            
             sessions.push(newSession);
             localStorage.setItem('typingBattle_sessions', JSON.stringify(sessions));
         } catch (e) {
-            console.error('Gagal menyimpan ke localStorage', e);
+            console.error('Gagal simpan ke localStorage', e);
         }
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
     }
 
     // ─── BINDINGS ────────────────────────────────────
     DOM.btnJoinMulti.addEventListener('click', () => doJoin('multi'));
     DOM.btnJoinSolo.addEventListener('click', () => doJoin('solo'));
     DOM.inputUsername.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') doJoin('multi'); // Default enter ke Multi
+        if (e.key === 'Enter') doJoin('multi');
     });
     
     // Tombol Mulai Manual
-    DOM.btnStartManual.addEventListener('click', () => {
-        DOM.btnStartManual.disabled = true;
-        DOM.btnStartManual.textContent = "MEMULAI...";
-        send({ type: 'START_MATCH' });
-    });
+    if (DOM.btnStartManual) {
+        DOM.btnStartManual.addEventListener('click', () => {
+            DOM.btnStartManual.disabled = true;
+            DOM.btnStartManual.textContent = "MEMULAI...";
+            send({ type: 'START_MATCH' });
+        });
+    }
 
     DOM.typingInput.addEventListener('input', onTypingInput);
     DOM.typingInput.addEventListener('paste', (e) => {
