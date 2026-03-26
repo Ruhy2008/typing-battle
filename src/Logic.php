@@ -14,7 +14,6 @@ class Logic implements MessageComponentInterface
     public function __construct()
     {
         $this->clients = new \SplObjectStorage;
-        // Panggil file db.php milik Anda yang canggih itu
         require_once __DIR__ . '/db.php';
     }
 
@@ -30,17 +29,14 @@ class Logic implements MessageComponentInterface
         if (!$data) return;
 
         switch ($data['type']) {
-            // ─── FITUR BARU: MINTA DATA LEADERBOARD DARI DASHBOARD ───
             case 'GET_LEADERBOARD':
                 try {
-                    $board = getLeaderboard(); // Panggil dari db.php
+                    $board = getLeaderboard(); 
                     $from->send(json_encode([
                         'type' => 'LEADERBOARD',
                         'data' => $board
                     ]));
-                } catch (\Exception $e) {
-                    echo "Gagal fetch leaderboard: " . $e->getMessage() . "\n";
-                }
+                } catch (\Exception $e) { }
                 break;
 
             case 'JOIN':
@@ -77,7 +73,10 @@ class Logic implements MessageComponentInterface
 
                 $this->rooms[$id_room]['players'][$from->resourceId] = [
                     'conn' => $from, 'username' => $username, 'typedText' => '',
-                    'progress' => 0, 'wpm' => 0, 'acc' => 100, 'selesai' => false, 'score' => 0
+                    'progress' => 0, 'wpm' => 0, 'acc' => 100, 'selesai' => false, 'score' => 0,
+                    // VARIABEL BARU UNTUK MENGINGAT KESALAHAN
+                    'total_errors' => 0, 
+                    'last_length' => 0 
                 ];
 
                 $this->broadcastLobbyState($id_room);
@@ -122,12 +121,24 @@ class Logic implements MessageComponentInterface
 
                     $typed = $data['typedText'];
                     $kalimat = $this->rooms[$id_room]['kalimat'];
-                    
-                    $benar = 0;
                     $panjang_ketik = strlen($typed);
                     $panjang_kalimat = strlen($kalimat);
-                    $cek_len = min($panjang_ketik, $panjang_kalimat);
                     
+                    // ─── LOGIKA MENDETEKSI KESALAHAN PERMANEN ───
+                    // Jika teksnya bertambah panjang (pemain mengetik huruf baru, bukan menghapus)
+                    if ($panjang_ketik > $player['last_length']) {
+                        $last_index = $panjang_ketik - 1; // Index huruf terakhir yang baru saja diketik
+                        if ($last_index < $panjang_kalimat) {
+                            if ($typed[$last_index] !== $kalimat[$last_index]) {
+                                $player['total_errors']++; // Catat dosanya!
+                            }
+                        }
+                    }
+                    $player['last_length'] = $panjang_ketik; // Ingat panjang ketikan saat ini
+
+                    // ─── Hitung WPM (Berdasarkan huruf benar) ───
+                    $benar = 0;
+                    $cek_len = min($panjang_ketik, $panjang_kalimat);
                     for ($i = 0; $i < $cek_len; $i++) {
                         if ($typed[$i] == $kalimat[$i]) $benar++;
                     }
@@ -137,7 +148,13 @@ class Logic implements MessageComponentInterface
 
                     $waktu_jalan = max(0.01, (microtime(true) - $this->rooms[$id_room]['start_time']) / 60);
                     $wpm = ($benar / 5) / $waktu_jalan;
-                    $acc = $panjang_ketik > 0 ? ($benar / $panjang_ketik) * 100 : 100;
+                    
+                    // ─── Hitung Akurasi yang Adil & Akurat ───
+                    $acc = 100;
+                    if ($panjang_kalimat > 0) {
+                        $error_rate_pct = ($player['total_errors'] / $panjang_kalimat) * 100;
+                        $acc = max(0, 100 - $error_rate_pct); // Akurasi minimal 0% (tidak bisa minus)
+                    }
 
                     $player['progress'] = $progress;
                     $player['wpm'] = $wpm;
@@ -232,7 +249,6 @@ class Logic implements MessageComponentInterface
         $standings = [];
         foreach ($room['players'] as $p) {
             $skor_akhir = (int) floor($p['wpm'] * ($p['acc'] / 100));
-            // Hukuman jika waktu habis tapi belum selesai ngetik
             if (!$p['selesai']) $skor_akhir = (int)($skor_akhir * 0.5); 
             
             $wpm = round($p['wpm'], 1);
@@ -240,23 +256,14 @@ class Logic implements MessageComponentInterface
 
             $standings[] = ['username' => $p['username'], 'totalScore' => $skor_akhir, 'avgWpm' => $wpm, 'bestWpm' => $wpm, 'avgAccuracy' => round($p['acc'], 1)];
             
-            // ─── FITUR BARU: SIMPAN KE DATABASE MYSQL ───
-            try {
-                // (username, skor, wpm_rata2, error_rate, wpm_terbaik)
-                upsertPlayerStats($p['username'], $skor_akhir, $wpm, $errorRate, $wpm);
-            } catch (\Exception $e) {
-                echo "Gagal simpan ke DB: " . $e->getMessage() . "\n";
-            }
-            try {
-                // 1. (Leaderboard)
-                upsertPlayerStats($p['username'], $skor_akhir, $wpm, $errorRate, $wpm);
-                
-                // 2. (ROUND LOGS)
-                $waktu_terpakai = 60 - $room['waktu_sisa'];
-                saveRoundLog($id_room, 1, $p['username'], $wpm, $errorRate, $waktu_terpakai, $room['kalimat']);
-                
-            } catch (\Exception $e) {
-                echo "Gagal simpan ke DB: " . $e->getMessage() . "\n";
+            // HANYA SIMPAN KE DB JIKA MODE MULTIPLAYER
+            if ($room['mode'] === 'multi') {
+                try {
+                    upsertPlayerStats($p['username'], $skor_akhir, $wpm, $errorRate, $wpm);
+                    
+                    $waktu_terpakai = 60 - $room['waktu_sisa'];
+                    saveRoundLog($id_room, 1, $p['username'], $wpm, $errorRate, $waktu_terpakai, $room['kalimat']);
+                } catch (\Exception $e) { }
             }
         }
         usort($standings, fn($a, $b) => $b['totalScore'] - $a['totalScore']);
