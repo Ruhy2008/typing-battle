@@ -10,23 +10,18 @@ class Logic implements MessageComponentInterface
 {
     public $clients;
     public $rooms = array(); 
-    public $db;
 
     public function __construct()
     {
         $this->clients = new \SplObjectStorage;
-        try {
-            require_once __DIR__ . '/db.php';
-            $this->db = getDB();
-        } catch (\Exception $e) {
-            echo "Error DB: " . $e->getMessage() . "\n";
-        }
+        // Panggil file db.php milik Anda yang canggih itu
+        require_once __DIR__ . '/db.php';
     }
 
     public function onOpen(ConnectionInterface $conn)
     {
         $this->clients->attach($conn);
-        echo "Player masuk dengan ID: {$conn->resourceId}\n";
+        echo "Player masuk: {$conn->resourceId}\n";
     }
 
     public function onMessage(ConnectionInterface $from, $msg)
@@ -35,6 +30,19 @@ class Logic implements MessageComponentInterface
         if (!$data) return;
 
         switch ($data['type']) {
+            // ─── FITUR BARU: MINTA DATA LEADERBOARD DARI DASHBOARD ───
+            case 'GET_LEADERBOARD':
+                try {
+                    $board = getLeaderboard(); // Panggil dari db.php
+                    $from->send(json_encode([
+                        'type' => 'LEADERBOARD',
+                        'data' => $board
+                    ]));
+                } catch (\Exception $e) {
+                    echo "Gagal fetch leaderboard: " . $e->getMessage() . "\n";
+                }
+                break;
+
             case 'JOIN':
                 $username = htmlspecialchars($data['username']);
                 $mode = isset($data['mode']) ? $data['mode'] : 'multi'; 
@@ -72,7 +80,6 @@ class Logic implements MessageComponentInterface
                     'progress' => 0, 'wpm' => 0, 'acc' => 100, 'selesai' => false, 'score' => 0
                 ];
 
-                echo "{$username} join ke room {$id_room} (Mode: {$mode})\n";
                 $this->broadcastLobbyState($id_room);
                 break;
 
@@ -90,7 +97,6 @@ class Logic implements MessageComponentInterface
                             $p['conn']->send(json_encode(['type' => 'START_GAME', 'kalimat' => $this->rooms[$id_room]['kalimat']]));
                         }
 
-                        // BENTENG TIMER: Pakai try-catch agar server tidak mati mendadak (freeze)
                         $this->rooms[$id_room]['timer_loop'] = Loop::addPeriodicTimer(1, function() use ($id_room) {
                             try {
                                 if (!isset($this->rooms[$id_room])) return;
@@ -101,9 +107,7 @@ class Logic implements MessageComponentInterface
                                 } else {
                                     $this->broadcastGameState($id_room);
                                 }
-                            } catch (\Throwable $e) {
-                                echo "Timer error: " . $e->getMessage() . "\n";
-                            }
+                            } catch (\Throwable $e) {}
                         });
                     }
                 }
@@ -128,7 +132,6 @@ class Logic implements MessageComponentInterface
                         if ($typed[$i] == $kalimat[$i]) $benar++;
                     }
 
-                    // FIX PROGRESS: Berdasarkan jumlah panjang ketikan, agar bisa mundur saat di-backspace
                     $progress = $panjang_kalimat > 0 ? ($panjang_ketik / $panjang_kalimat) * 100 : 0;
                     if ($progress > 100) $progress = 100;
 
@@ -140,10 +143,8 @@ class Logic implements MessageComponentInterface
                     $player['wpm'] = $wpm;
                     $player['acc'] = $acc;
 
-                    // FIX SELESAI: Selesai hanya jika ketikan pas di akhir dan semua hurufnya BENAR
                     if ($benar >= $panjang_kalimat && $panjang_ketik == $panjang_kalimat) {
                         $player['selesai'] = true;
-                        $player['score'] += (int) floor($wpm * ($acc / 100));
                         
                         if ($this->rooms[$id_room]['waktu_sisa'] > 5) {
                             $this->rooms[$id_room]['waktu_sisa'] = 5; 
@@ -183,9 +184,7 @@ class Logic implements MessageComponentInterface
         }
     }
 
-    public function onError(ConnectionInterface $conn, \Exception $e) { 
-        $conn->close(); 
-    }
+    public function onError(ConnectionInterface $conn, \Exception $e) { $conn->close(); }
 
     private function findRoomByPlayer($resourceId) {
         foreach ($this->rooms as $id => $room) {
@@ -233,8 +232,21 @@ class Logic implements MessageComponentInterface
         $standings = [];
         foreach ($room['players'] as $p) {
             $skor_akhir = (int) floor($p['wpm'] * ($p['acc'] / 100));
+            // Hukuman jika waktu habis tapi belum selesai ngetik
             if (!$p['selesai']) $skor_akhir = (int)($skor_akhir * 0.5); 
-            $standings[] = ['username' => $p['username'], 'totalScore' => $skor_akhir, 'avgWpm' => round($p['wpm'], 1), 'bestWpm' => round($p['wpm'], 1), 'avgAccuracy' => round($p['acc'], 1)];
+            
+            $wpm = round($p['wpm'], 1);
+            $errorRate = 100 - round($p['acc'], 1);
+
+            $standings[] = ['username' => $p['username'], 'totalScore' => $skor_akhir, 'avgWpm' => $wpm, 'bestWpm' => $wpm, 'avgAccuracy' => round($p['acc'], 1)];
+            
+            // ─── FITUR BARU: SIMPAN KE DATABASE MYSQL ───
+            try {
+                // (username, skor, wpm_rata2, error_rate, wpm_terbaik)
+                upsertPlayerStats($p['username'], $skor_akhir, $wpm, $errorRate, $wpm);
+            } catch (\Exception $e) {
+                echo "Gagal simpan ke DB: " . $e->getMessage() . "\n";
+            }
         }
         usort($standings, fn($a, $b) => $b['totalScore'] - $a['totalScore']);
 
