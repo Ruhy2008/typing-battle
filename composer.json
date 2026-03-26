@@ -4,7 +4,8 @@
     "type": "project",
     "require": {
         "cboden/ratchet": "^0.4",
-        "react/event-loop": "^1.0"
+        "react/event-loop": "^1.0",
+        "ext-pdo_mysql": "*"
     },
     "autoload": {
         "psr-4": {
