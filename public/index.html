@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⌨️ Typing Battle — Pixel Arena</title>
+    <meta name="description" content="Real-time multiplayer typing battle with pixel art aesthetics. Compete head-to-head in speed and accuracy!">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'pixel-bg': '#0a0a1a',
+                        'pixel-card': '#12122a',
+                        'pixel-primary': '#00ff88',
+                        'pixel-error': '#ff3366',
+                        'pixel-accent': '#7b5eff',
+                        'pixel-cyan': '#00d4ff',
+                        'pixel-text': '#e0e0ff',
+                        'pixel-muted': '#5a5a8a',
+                        'pixel-dark': '#08081a',
+                    },
+                    fontFamily: {
+                        pixel: ['"Press Start 2P"', 'cursive'],
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                        body: ['"Inter"', 'sans-serif'],
+                    },
+                    animation: {
+                        'pixel-blink': 'pixelBlink 0.6s steps(1) infinite',
+                        'glow-pulse': 'glowPulse 2s ease-in-out infinite',
+                        'slide-up': 'slideUp 0.4s ease-out',
+                        'pop-in': 'popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                        'shake': 'shake 0.3s steps(3)',
+                    },
+                    keyframes: {
+                        pixelBlink: {
+                            '0%, 49%': { opacity: '1' },
+                            '50%, 100%': { opacity: '0' },
+                        },
+                        glowPulse: {
+                            '0%, 100%': { filter: 'drop-shadow(0 0 6px currentColor)' },
+                            '50%': { filter: 'drop-shadow(0 0 16px currentColor)' },
+                        },
+                        slideUp: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        popIn: {
+                            '0%': { opacity: '0', transform: 'scale(0.8)' },
+                            '100%': { opacity: '1', transform: 'scale(1)' },
+                        },
+                        shake: {
+                            '0%': { transform: 'translateX(0)' },
+                            '33%': { transform: 'translateX(-4px)' },
+                            '66%': { transform: 'translateX(4px)' },
+                            '100%': { transform: 'translateX(0)' },
+                        },
+                    }
+                }
+            }
+        }
+    </script>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-pixel-bg text-pixel-text font-body min-h-screen flex items-center justify-center overflow-hidden">
+
+    <!-- CRT Scanline Overlay -->
+    <div class="crt-overlay"></div>
+
+    <!-- Main Container -->
+    <div id="app" class="relative z-10 w-full max-w-4xl mx-auto px-4 py-6">
+
+        <!-- ============================================= -->
+        <!-- SCREEN: JOIN (Lobby) -->
+        <!-- ============================================= -->
+        <div id="screen-join" class="screen active">
+            <div class="pixel-card p-8 text-center animate-slide-up">
+                <!-- Logo -->
+                <div class="mb-8">
+                    <h1 class="font-pixel text-pixel-primary text-2xl md:text-3xl mb-2 animate-glow-pulse">
+                        ⌨️ TYPING
+                    </h1>
+                    <h1 class="font-pixel text-pixel-cyan text-2xl md:text-3xl animate-glow-pulse">
+                        BATTLE
+                    </h1>
+                    <p class="text-pixel-muted text-sm mt-4 font-mono">pixel arena edition</p>
+                </div>
+
+                <!-- Username Input -->
+                <div class="max-w-xs mx-auto mb-6">
+                    <label class="font-pixel text-xs text-pixel-accent block mb-3">ENTER YOUR NAME</label>
+                    <input
+                        type="text"
+                        id="input-username"
+                        class="pixel-input w-full text-center"
+                        placeholder="Player1"
+                        maxlength="20"
+                        autocomplete="off"
+                        spellcheck="false"
+                    >
+                </div>
+
+                <!-- Join Button -->
+                <button id="btn-join" class="pixel-btn pixel-btn-primary mx-auto">
+                    <span class="font-pixel text-xs">JOIN BATTLE</span>
+                </button>
+
+                <!-- Error Message -->
+                <div id="join-error" class="hidden mt-4 text-pixel-error font-pixel text-[10px] animate-shake"></div>
+
+                <!-- Player List -->
+                <div id="lobby-players" class="mt-8 hidden">
+                    <p class="font-pixel text-[10px] text-pixel-muted mb-4">PLAYERS IN LOBBY</p>
+                    <div id="player-list-lobby" class="flex flex-wrap justify-center gap-3"></div>
+                    <p class="text-pixel-muted text-xs mt-4 font-mono">Waiting for 2+ players to start...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================= -->
+        <!-- SCREEN: COUNTDOWN -->
+        <!-- ============================================= -->
+        <div id="screen-countdown" class="screen">
+            <div class="pixel-card p-12 text-center">
+                <p class="font-pixel text-pixel-muted text-xs mb-6">GET READY</p>
+                <div id="countdown-number" class="font-pixel text-8xl text-pixel-primary animate-glow-pulse">3</div>
+                <p class="font-pixel text-pixel-cyan text-xs mt-6">ROUND STARTING...</p>
+            </div>
+        </div>
+
+        <!-- ============================================= -->
+        <!-- SCREEN: PLAYING -->
+        <!-- ============================================= -->
+        <div id="screen-playing" class="screen">
+            <!-- Top HUD: Round + Timer -->
+            <div class="flex justify-between items-center mb-4">
+                <div class="pixel-badge">
+                    <span class="font-pixel text-[10px] text-pixel-accent">ROUND</span>
+                    <span id="hud-round" class="font-pixel text-sm text-pixel-text ml-2">1/5</span>
+                </div>
+                <div class="pixel-badge">
+                    <span id="hud-timer" class="font-pixel text-lg text-pixel-cyan">60</span>
+                    <span class="font-pixel text-[10px] text-pixel-muted ml-1">SEC</span>
+                </div>
+            </div>
+
+            <!-- Sentence Display -->
+            <div class="pixel-card p-6 mb-4">
+                <p class="font-pixel text-[10px] text-pixel-muted mb-3">TYPE THIS:</p>
+                <div id="sentence-display" class="font-mono text-lg leading-relaxed tracking-wide min-h-[4rem]"></div>
+            </div>
+
+            <!-- Typing Input -->
+            <div class="pixel-card p-4 mb-4">
+                <textarea
+                    id="typing-input"
+                    class="pixel-textarea w-full"
+                    rows="3"
+                    placeholder="Start typing here..."
+                    autocomplete="off"
+                    autocorrect="off"
+                    autocapitalize="off"
+                    spellcheck="false"
+                ></textarea>
+            </div>
+
+            <!-- Live Stats HUD -->
+            <div class="grid grid-cols-4 gap-3 mb-4">
+                <div class="pixel-stat-card">
+                    <span class="font-pixel text-[8px] text-pixel-muted block mb-1">RAW WPM</span>
+                    <span id="live-raw-wpm" class="font-pixel text-sm text-pixel-primary">0</span>
+                </div>
+                <div class="pixel-stat-card">
+                    <span class="font-pixel text-[8px] text-pixel-muted block mb-1">NET WPM</span>
+                    <span id="live-net-wpm" class="font-pixel text-sm text-pixel-cyan">0</span>
+                </div>
+                <div class="pixel-stat-card">
+                    <span class="font-pixel text-[8px] text-pixel-muted block mb-1">ACCURACY</span>
+                    <span id="live-accuracy" class="font-pixel text-sm text-pixel-accent">100%</span>
+                </div>
+                <div class="pixel-stat-card">
+                    <span class="font-pixel text-[8px] text-pixel-muted block mb-1">ERRORS</span>
+                    <span id="live-errors" class="font-pixel text-sm text-pixel-error">0</span>
+                </div>
+            </div>
+
+            <!-- Accuracy Gauge -->
+            <div class="mb-4">
+                <div class="pixel-progress-track">
+                    <div id="accuracy-gauge" class="pixel-progress-fill bg-pixel-primary" style="width: 100%"></div>
+                </div>
+            </div>
+
+            <!-- Player Progress Bars -->
+            <div id="player-progress-container" class="space-y-2"></div>
+        </div>
+
+        <!-- ============================================= -->
+        <!-- SCREEN: ROUND RESULT -->
+        <!-- ============================================= -->
+        <div id="screen-round-result" class="screen">
+            <div class="pixel-card p-6 text-center animate-slide-up">
+                <p class="font-pixel text-pixel-accent text-xs mb-2">ROUND COMPLETE</p>
+                <h2 id="round-result-title" class="font-pixel text-pixel-primary text-lg mb-6">Round 1 Results</h2>
+
+                <!-- Results Table -->
+                <div class="overflow-x-auto mb-6">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="border-b-2 border-pixel-muted/30">
+                                <th class="font-pixel text-[8px] text-pixel-muted pb-2 px-2">#</th>
+                                <th class="font-pixel text-[8px] text-pixel-muted pb-2 px-2">PLAYER</th>
+                                <th class="font-pixel text-[8px] text-pixel-muted pb-2 px-2">NET WPM</th>
+                                <th class="font-pixel text-[8px] text-pixel-muted pb-2 px-2">ACC%</th>
+                                <th class="font-pixel text-[8px] text-pixel-muted pb-2 px-2">SCORE</th>
+                            </tr>
+                        </thead>
+                        <tbody id="round-results-body"></tbody>
+                    </table>
+                </div>
+
+                <!-- Standings -->
+                <div class="mt-4">
+                    <p class="font-pixel text-[10px] text-pixel-cyan mb-3">OVERALL STANDINGS</p>
+                    <div id="round-standings" class="space-y-2"></div>
+                </div>
+
+                <p class="text-pixel-muted text-xs mt-6 font-mono">Next round starting soon...</p>
+            </div>
+        </div>
+
+        <!-- ============================================= -->
+        <!-- SCREEN: GAME OVER -->
+        <!-- ============================================= -->
+        <div id="screen-game-over" class="screen">
+            <div class="pixel-card p-6 text-center animate-slide-up">
+                <!-- Winner Banner -->
+                <div class="mb-6">
+                    <p class="font-pixel text-pixel-accent text-xs mb-2">🏆 GAME OVER 🏆</p>
+                    <h2 id="winner-name" class="font-pixel text-pixel-primary text-xl animate-glow-pulse">Winner!</h2>
+                </div>
+
+                <!-- Final Standings -->
+                <div class="overflow-x-auto mb-6">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="border-b-2 border-pixel-muted/30">
+                                <th class="font-pixel text-[8px] text-pixel-muted pb-2 px-2">RANK</th>
+                                <th class="font-pixel text-[8px] text-pixel-muted pb-2 px-2">PLAYER</th>
+                                <th class="font-pixel text-[8px] text-pixel-muted pb-2 px-2">SCORE</th>
+                                <th class="font-pixel text-[8px] text-pixel-muted pb-2 px-2">AVG WPM</th>
+                                <th class="font-pixel text-[8px] text-pixel-muted pb-2 px-2">AVG ACC</th>
+                            </tr>
+                        </thead>
+                        <tbody id="final-standings-body"></tbody>
+                    </table>
+                </div>
+
+                <!-- Per-Player Stats -->
+                <div id="player-stats-panels" class="space-y-4 mb-6"></div>
+
+                <!-- Play Again -->
+                <button id="btn-play-again" class="pixel-btn pixel-btn-primary mx-auto mt-4">
+                    <span class="font-pixel text-xs">PLAY AGAIN</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- ============================================= -->
+        <!-- CONNECTION STATUS -->
+        <!-- ============================================= -->
+        <div id="connection-status" class="fixed bottom-4 right-4 z-50">
+            <div class="pixel-badge text-[8px] font-pixel">
+                <span id="ws-status-dot" class="inline-block w-2 h-2 rounded-full bg-pixel-error mr-2"></span>
+                <span id="ws-status-text" class="text-pixel-muted">DISCONNECTED</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="client.js"></script>
+</body>
+</html>

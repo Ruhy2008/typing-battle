@@ -1,5 +1,5 @@
 <?php
-// public/db_api.php — REST API untuk dashboard (Adam)
+
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
