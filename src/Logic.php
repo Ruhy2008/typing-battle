@@ -100,24 +100,15 @@ class Logic implements MessageComponentInterface
         $this->clients = new \SplObjectStorage();
 
         // Optional database connection
-        $dbHost = getenv('DB_HOST');
-        $dbName = getenv('DB_NAME');
-        $dbUser = getenv('DB_USER');
-        $dbPass = getenv('DB_PASS');
-
-        if ($dbHost && $dbName && $dbUser) {
-            try {
-                $this->db = new \PDO(
-                    "mysql:host={$dbHost};dbname={$dbName};charset=utf8mb4",
-                    $dbUser,
-                    $dbPass ?: '',
-                    [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
-                );
-                echo "[DB] Connected to MySQL.\n";
-            } catch (\PDOException $e) {
-                echo "[DB] Connection failed: {$e->getMessage()}. Running without database.\n";
-                $this->db = null;
-            }
+        // Gunakan fungsi getDB() dari db.php
+        // Railway env vars: MYSQLHOST, MYSQLDATABASE, MYSQLUSER, MYSQLPASSWORD
+        // Fallback ke DB_HOST dll untuk lokal
+        try {
+            require_once __DIR__ . '/db.php';
+            $this->db = getDB();
+        } catch (\Throwable $e) {
+            echo "[DB] db.php tidak ditemukan atau error: {$e->getMessage()}\n";
+            $this->db = null;
         }
     }
 
@@ -154,11 +145,57 @@ class Logic implements MessageComponentInterface
             case 'FINISH':
                 $this->handleFinish($from, $data);
                 break;
+            case 'GET_LEADERBOARD':
+                $this->handleGetLeaderboard($from);
+                break;
             default:
                 $this->sendToClient($from, [
                     'type'    => 'ERROR',
                     'message' => "Unknown message type: {$type}",
                 ]);
+        }
+    }
+
+    // ========================================================================
+    // LEADERBOARD HANDLER
+    // ========================================================================
+
+    private function handleGetLeaderboard(ConnectionInterface $from): void
+    {
+        echo "[Server] Leaderboard request from #{$from->resourceId}\n";
+
+        try {
+            if (!$this->db) {
+                $this->sendToClient($from, [
+                    'type'    => 'LEADERBOARD',
+                    'data'    => [],
+                    'warning' => 'Database tidak tersedia.',
+                ]);
+                return;
+            }
+
+            $stmt = $this->db->query("
+                SELECT username, total_score, avg_wpm, best_wpm, avg_error_rate, sessions_played
+                FROM players_stats
+                ORDER BY total_score DESC
+                LIMIT 10
+            ");
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            $this->sendToClient($from, [
+                'type' => 'LEADERBOARD',
+                'data' => $rows,
+            ]);
+
+            echo "[Server] Leaderboard dikirim: " . count($rows) . " entri\n";
+
+        } catch (\PDOException $e) {
+            echo "[DB ERR] Leaderboard gagal: {$e->getMessage()}\n";
+            $this->sendToClient($from, [
+                'type'    => 'LEADERBOARD',
+                'data'    => [],
+                'warning' => 'Gagal ambil data leaderboard.',
+            ]);
         }
     }
 
