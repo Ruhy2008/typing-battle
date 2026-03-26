@@ -3,262 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Typing Battle — Adu Ketik Real-time</title>
-    <style>
-        /* ── Reset & Base ───────────────────────────── */
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, sans-serif;
-            background: #0f0f1a;
-            color: #e0e0f0;
-            min-height: 100vh;
-            overflow-x: hidden;
-        }
-
-        /* Video background */
-        #bg-video {
-            position: fixed; top: 0; left: 0;
-            width: 100%; height: 100%;
-            object-fit: cover; z-index: -1; opacity: 0.25;
-        }
-
-        .hidden { display: none !important; }
-
-        .screen {
-            max-width: 860px;
-            margin: 0 auto;
-            padding: 32px 20px;
-        }
-
-        h1 { font-size: 2.4rem; text-align: center; color: #7c6af7; margin-bottom: 8px; }
-        h2 { font-size: 1.5rem; color: #a78bfa; margin-bottom: 16px; }
-        .subtitle { text-align: center; color: #888; margin-bottom: 32px; font-size: 0.95rem; }
-
-        /* ── Cards ──────────────────────────────────── */
-        .card {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 24px;
-            margin-bottom: 20px;
-        }
-
-        /* ── Lobby ──────────────────────────────────── */
-        .join-row {
-            display: flex; gap: 10px; margin-bottom: 20px;
-        }
-        .join-row input {
-            flex: 1; padding: 12px 16px;
-            background: #1e1e2e; border: 1px solid #444;
-            border-radius: 8px; color: #fff; font-size: 1rem;
-        }
-        .join-row input:focus { outline: none; border-color: #7c6af7; }
-        button {
-            padding: 12px 24px;
-            background: #7c6af7; border: none;
-            border-radius: 8px; color: #fff;
-            font-size: 1rem; cursor: pointer; font-weight: 600;
-            transition: background .2s;
-        }
-        button:hover { background: #6455d4; }
-        button:disabled { background: #444; cursor: not-allowed; }
-
-        #player-count { color: #888; font-size: 0.9rem; margin-bottom: 8px; }
-        #player-list { list-style: none; }
-        #player-list li {
-            padding: 8px 12px; border-radius: 6px;
-            background: rgba(255,255,255,0.05); margin-bottom: 6px;
-        }
-        #player-list li.me { border-left: 3px solid #7c6af7; }
-
-        /* Log area */
-        #log-area { list-style: none; font-size: 0.82rem; max-height: 120px; overflow-y: auto; }
-        #log-area li { padding: 2px 0; }
-        #log-area li.success { color: #4ade80; }
-        #log-area li.error   { color: #f87171; }
-        #log-area li.info    { color: #93c5fd; }
-
-        /* ── Game Screen ────────────────────────────── */
-        .game-header {
-            display: flex; justify-content: space-between;
-            align-items: center; margin-bottom: 20px;
-        }
-        .stat-box {
-            text-align: center; background: rgba(255,255,255,0.07);
-            border-radius: 8px; padding: 10px 18px;
-        }
-        .stat-box .val { font-size: 2rem; font-weight: 700; color: #7c6af7; }
-        .stat-box .lbl { font-size: 0.75rem; color: #888; }
-
-        /* Sentence display */
-        #sentence-display {
-            font-size: 1.35rem; line-height: 1.9;
-            letter-spacing: 0.04em; word-break: break-word;
-            background: rgba(0,0,0,0.3); padding: 20px;
-            border-radius: 10px; margin-bottom: 16px;
-            min-height: 80px; font-family: 'Courier New', monospace;
-        }
-        #sentence-display .correct { color: #4ade80; }
-        #sentence-display .wrong   { color: #f87171; background: rgba(248,113,113,0.15); }
-
-        /* Typing input */
-        #typing-input {
-            width: 100%; padding: 14px 16px;
-            background: #1e1e2e; border: 2px solid #444;
-            border-radius: 8px; color: #fff; font-size: 1.1rem;
-            font-family: 'Courier New', monospace;
-            transition: border-color .2s;
-        }
-        #typing-input:focus { outline: none; border-color: #7c6af7; }
-        #typing-input:disabled { opacity: 0.5; }
-
-        /* Progress bars */
-        .progress-section h3 { color: #888; font-size: 0.85rem; margin-bottom: 10px; text-transform: uppercase; }
-        .progress-row {
-            display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
-        }
-        .progress-name { width: 100px; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .progress-bar-wrap {
-            flex: 1; height: 12px; background: rgba(255,255,255,0.1);
-            border-radius: 6px; overflow: hidden;
-        }
-        .progress-bar {
-            height: 100%; background: linear-gradient(90deg, #7c6af7, #a78bfa);
-            border-radius: 6px; transition: width 0.2s ease;
-        }
-        .progress-pct { width: 38px; font-size: 0.78rem; color: #888; text-align: right; }
-
-        /* ── Result Screen ──────────────────────────── */
-        table { width: 100%; border-collapse: collapse; }
-        th, td {
-            padding: 10px 12px; text-align: left;
-            border-bottom: 1px solid rgba(255,255,255,0.07);
-            font-size: 0.9rem;
-        }
-        th { color: #888; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; }
-        tr.highlight td { color: #a78bfa; font-weight: 600; }
-
-        /* ── Final Screen ───────────────────────────── */
-        .winner-badge {
-            text-align: center; font-size: 2rem; margin-bottom: 12px;
-        }
-        #result-next-msg { color: #888; font-size: 0.9rem; margin-top: 14px; }
-    </style>
+    <title>Typing Battle — Cyber Arena</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&family=Fira+Code:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<!-- Background Video -->
-<video id="bg-video" autoplay loop muted playsinline>
-    <source src="asset/background.webm" type="video/webm">
-</video>
+<div class="video-container">
+    <video autoplay muted loop id="bg-video">
+        <source src="/asset/background.mp4" type="video/mp4">
+    </video>
+    <div class="video-overlay"></div>
+</div>
 
-<!-- ══════════════════════════════════════════════ -->
-<!-- LOBBY SCREEN                                   -->
-<!-- ══════════════════════════════════════════════ -->
 <div id="lobby-screen" class="screen">
-    <h1>⌨️ Typing Battle</h1>
-    <p class="subtitle">Game Adu Ketik Real-time — Siapa Paling Cepat dan Akurat?</p>
+    <h1 class="game-title">Typing Battle</h1>
+    <p class="subtitle">Test Your Typing Speed</p>
 
-    <div class="card">
-        <h2>Bergabung ke Room</h2>
-        <div class="join-row">
-            <input id="username-input" type="text" placeholder="Masukkan username kamu..." maxlength="20" />
-            <button id="join-btn">Join</button>
+    <div class="input-group">
+        <input type="text" id="username-input" placeholder="Masukkan Nama..." maxlength="20" autocomplete="off">
+        
+        <div style="display: flex; gap: 10px; width: 100%; margin-top: 5px;">
+            <button id="join-multi-btn" class="btn-gradient" style="flex: 1; font-size: 1rem; padding: 12px;">🌍 MULTIPLAYER</button>
+            <button id="join-solo-btn" class="btn-outline-cyan" style="flex: 1; font-size: 1rem; padding: 12px;">👤 LATIHAN SOLO</button>
         </div>
-        <p id="player-count">0 / 2 pemain</p>
-        <ul id="player-list"></ul>
     </div>
 
-    <div class="card">
-        <h2>📋 Log</h2>
-        <ul id="log-area"></ul>
+    <div id="player-list-container" class="hidden">
+        <h3>Players in Room <span id="player-count">(0/5)</span></h3>
+        <ul id="player-list"></ul>
+        
+        <p id="status-text" class="waiting-text" style="margin-top: 15px; font-style: italic;">Menunggu pemain lain...</p>
+        
+        <button id="start-btn" class="btn-gradient hidden" style="width: 100%; margin-top: 15px;">🚀 MULAI SEKARANG</button>
     </div>
 </div>
 
-<!-- ══════════════════════════════════════════════ -->
-<!-- GAME SCREEN                                    -->
-<!-- ══════════════════════════════════════════════ -->
 <div id="game-screen" class="screen hidden">
-    <div class="game-header">
-        <div class="stat-box">
-            <div class="val" id="round-label">Ronde 1 / 5</div>
-            <div class="lbl">RONDE</div>
-        </div>
-        <div class="stat-box">
-            <div class="val" id="timer-display">60</div>
-            <div class="lbl">DETIK</div>
-        </div>
-        <div class="stat-box">
-            <div class="val" id="wpm-display">0</div>
-            <div class="lbl">WPM (LIVE)</div>
-        </div>
-    </div>
+    <div id="round-indicator" id="round-label">RONDE 1 / 5</div>
 
-    <div class="card">
-        <div id="sentence-display"></div>
-        <input id="typing-input" type="text" autocomplete="off" autocorrect="off"
-               autocapitalize="off" spellcheck="false"
-               placeholder="Mulai mengetik di sini..." />
-    </div>
-
-    <div class="card progress-section">
-        <h3>Progress Pemain</h3>
-        <!-- Progress diri sendiri -->
-        <div class="progress-row" id="my-progress-row">
-            <span class="progress-name" id="my-name-label">Kamu</span>
-            <div class="progress-bar-wrap">
-                <div class="progress-bar" id="my-progress" style="width:0%"></div>
-            </div>
-            <span class="progress-pct" id="my-progress-label">0%</span>
+    <div id="score-panel">
+        <div class="prog-row me-prog">
+            <div class="prog-name"><span id="my-name-label">Kamu</span> <span id="my-progress-label">0%</span></div>
+            <div class="prog-track"><div class="prog-fill" id="my-progress" style="width:0%"></div></div>
         </div>
-        <!-- Progress lawan (diisi dinamis oleh JS) -->
         <div id="opponents-progress"></div>
     </div>
-</div>
 
-<!-- ══════════════════════════════════════════════ -->
-<!-- RESULT SCREEN (antar ronde)                    -->
-<!-- ══════════════════════════════════════════════ -->
-<div id="result-screen" class="screen hidden">
-    <h2 id="result-round-label">Hasil Ronde</h2>
-    <div class="card">
-        <table>
-            <thead>
-                <tr>
-                    <th>#</th><th>Pemain</th><th>WPM</th>
-                    <th>Error</th><th>Waktu</th><th>Poin</th>
-                </tr>
-            </thead>
-            <tbody id="result-table-body"></tbody>
-        </table>
-        <p id="result-next-msg"></p>
+    <div class="typing-arena">
+        <div id="sentence-display">Teks akan muncul di sini...</div>
+        <input id="typing-input" type="text" autocomplete="off" spellcheck="false" placeholder="Ketik di sini saat game dimulai..." />
+    </div>
+
+    <div id="stats-panel">
+        <div class="stat-card">
+            <div class="stat-label">Sisa Waktu</div>
+            <div class="stat-value" style="color:var(--accent-pink)"><span id="timer-display">60</span><span class="stat-unit">s</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Live Kecepatan</div>
+            <div class="stat-value" style="color:var(--accent-green)"><span id="wpm-display">0</span><span class="stat-unit">WPM</span></div>
+        </div>
     </div>
 </div>
 
-<!-- ══════════════════════════════════════════════ -->
-<!-- FINAL SCREEN (GAME OVER)                       -->
-<!-- ══════════════════════════════════════════════ -->
-<div id="final-screen" class="screen hidden">
-    <div class="winner-badge">🏆 GAME OVER!</div>
-    <h2 style="text-align:center">Statistik Akhir</h2>
-    <div class="card">
+<div id="result-screen" class="screen hidden">
+    <div class="result-box">
+        <h2 class="game-title" style="font-size: 2.5rem; text-shadow: 0 0 10px var(--accent-green);" id="result-round-label">HASIL RONDE</h2>
         <table>
-            <thead>
-                <tr>
-                    <th>#</th><th>Pemain</th><th>Total Skor</th>
-                    <th>Avg WPM</th><th>Best WPM</th><th>Avg Error</th>
-                </tr>
-            </thead>
+            <thead><tr><th>Rank</th><th>Pemain</th><th>Net WPM</th><th>Akurasi</th><th>Poin</th></tr></thead>
+            <tbody id="result-table-body"></tbody>
+        </table>
+    </div>
+</div>
+
+<div id="final-screen" class="screen hidden">
+    <div class="result-box">
+        <h2 class="game-title" style="font-size: 3.5rem; color: var(--accent-yellow); text-shadow: 0 0 20px var(--accent-yellow);">MATCH OVER</h2>
+        <p class="subtitle mt-10">Statistik Akhir Pertandingan</p>
+        <table>
+            <thead><tr><th>Rank</th><th>Pemain</th><th>Total Skor</th><th>Avg WPM</th><th>Best WPM</th><th>Error Rate</th></tr></thead>
             <tbody id="final-table-body"></tbody>
         </table>
     </div>
-    <div style="text-align:center; margin-top:20px;">
-        <a href="dashboard.html" style="color:#a78bfa; text-decoration:none; font-size:0.95rem;">
-            📊 Lihat Dashboard Statistik Lengkap →
-        </a>
-    </div>
 </div>
+
+<a href="dashboard.html" class="dashboard-link">📊 Dashboard</a>
 
 <script src="client.js"></script>
 </body>

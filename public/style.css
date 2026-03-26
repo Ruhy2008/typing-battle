@@ -1,415 +1,192 @@
-/* =======================================================
-   Typing Battle — Pixel Arena — Custom Styles
-   Uses TailwindCSS for layout, this file for pixel effects
-   ======================================================= */
-
-/* ─── Reset & Base ──────────────────────────────────── */
-*, *::before, *::after {
-    box-sizing: border-box;
+:root {
+    --bg-dark:       #0a0a0f;
+    --bg-card:       rgba(15, 15, 25, 0.85);
+    --accent-cyan:   #00f5ff;
+    --accent-pink:   #ff2d75;
+    --accent-orange: #ff8c00;
+    --accent-green:  #00ff88;
+    --accent-yellow: #ffe600;
 }
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
 body {
-    margin: 0;
-    background: #0a0a1a;
-    color: #e0e0ff;
+    font-family: 'Rajdhani', sans-serif;
+    background: var(--bg-dark);
+    color: #fff;
     overflow-x: hidden;
+    min-height: 100vh;
+    /* Dotted background fallback jika video gagal load */
+    background-image: radial-gradient(rgba(0, 245, 255, 0.07) 1px, transparent 1px);
+    background-size: 32px 32px;
 }
 
-/* ─── CRT Scanline Overlay ──────────────────────────── */
-.crt-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 999;
+/* ─── Video Background ─── */
+.video-container { position: fixed; inset: 0; z-index: -1; overflow: hidden; }
+#bg-video { 
+    width: 100%; 
+    height: 100%; 
+    object-fit: cover; 
+    opacity: 0.35; 
+    
+    will-change: transform; 
+    transform: translateZ(0);
+}
+.video-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(10,10,15,.85) 0%, rgba(20,10,30,.75) 50%, rgba(10,10,15,.95) 100%);
     pointer-events: none;
-    background: repeating-linear-gradient(
-        0deg,
-        rgba(0, 0, 0, 0.12) 0px,
-        rgba(0, 0, 0, 0.12) 1px,
-        transparent 1px,
-        transparent 3px
-    );
-    mix-blend-mode: multiply;
 }
 
-/* ─── Screen Management ─────────────────────────────── */
+/* ─── Screen Layout ─── */
 .screen {
-    display: none;
+    position: relative; z-index: 10; width: 100vw; min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px;
 }
-.screen.active {
-    display: block;
-    animation: slideUp 0.35s ease-out;
+.hidden { display: none !important; }
+
+/* ─── Typography & Title ─── */
+.game-title {
+    font-family: 'Orbitron', monospace; font-size: clamp(2.5rem, 6vw, 4.5rem); font-weight: 900;
+    text-transform: uppercase; letter-spacing: 6px; color: #fff;
+    text-shadow: 0 0 10px var(--accent-cyan), 0 0 30px var(--accent-cyan);
+    animation: titlePulse 3s ease-in-out infinite; margin-bottom: 5px; text-align: center;
+}
+@keyframes titlePulse {
+    0%,100% { text-shadow: 0 0 10px var(--accent-cyan), 0 0 25px var(--accent-cyan); }
+    50%      { text-shadow: 0 0 20px var(--accent-cyan), 0 0 50px var(--accent-cyan), 0 0 70px var(--accent-cyan); }
+}
+.subtitle { font-size: 1.1rem; color: rgba(255,255,255,.55); letter-spacing: 4px; text-transform: uppercase; margin-bottom: 30px; text-align: center; }
+
+/* ─── Inputs & Buttons ─── */
+.input-group { display: flex; flex-direction: column; gap: 12px; align-items: center; margin-bottom: 20px; width: 100%; max-width: 400px; }
+
+#username-input {
+    width: 100%; padding: 15px 20px; font-size: 1.2rem;
+    font-family: 'Rajdhani', sans-serif; font-weight: 600; text-align: center;
+    background: rgba(255,255,255,.05); border: 2px solid rgba(0,245,255,.3);
+    border-radius: 10px; color: #fff; outline: none; transition: all .3s;
+}
+#username-input:focus { border-color: var(--accent-cyan); box-shadow: 0 0 20px rgba(0,245,255,.25); background: rgba(0,245,255,.04); }
+
+button { cursor: pointer; font-family: 'Rajdhani', sans-serif; font-weight: 700; transition: all .3s; }
+.btn-gradient {
+    background: linear-gradient(135deg, var(--accent-pink), var(--accent-orange));
+    border: none; border-radius: 10px; color: #fff; text-transform: uppercase; letter-spacing: 2px;
+    box-shadow: 0 4px 20px rgba(255, 45, 117, 0.4);
+}
+.btn-gradient:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 8px 30px rgba(255, 45, 117, 0.6); }
+.btn-gradient:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.btn-outline-cyan {
+    background: rgba(0, 245, 255, 0.05); border: 1px solid var(--accent-cyan);
+    border-radius: 10px; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 2px;
+}
+.btn-outline-cyan:hover { background: rgba(0, 245, 255, 0.15); box-shadow: 0 0 15px rgba(0, 245, 255, 0.3); }
+
+/* ─── Lobby List ─── */
+#player-list-container {
+    background: var(--bg-card); border: 1px solid rgba(0,245,255,.2);
+    border-radius: 14px; padding: 20px 28px; width: 100%; max-width: 400px; backdrop-filter: blur(10px);
+}
+#player-list-container h3 {
+    font-family: 'Orbitron', monospace; font-size: .9rem; letter-spacing: 3px;
+    color: var(--accent-cyan); margin-bottom: 15px; text-transform: uppercase; text-align: center;
+}
+#player-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+#player-list li {
+    padding: 10px 15px; background: rgba(0,245,255,.08); border-radius: 8px;
+    border-left: 3px solid var(--accent-cyan); font-weight: 500; font-size: 1rem;
+    display: flex; align-items: center; gap: 10px;
+}
+#player-list li.me { border-left-color: var(--accent-green); background: rgba(0,255,136,.1); color: var(--accent-green); }
+.waiting-text { text-align: center; color: rgba(255,255,255,.5); animation: blink 1.5s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+/* ─── Navigasi Dashboard ─── */
+.dashboard-link {
+    position: fixed; bottom: 20px; right: 20px; z-index: 999; padding: 10px 18px;
+    background: rgba(255,230,0,.15); border: 1px solid var(--accent-yellow);
+    border-radius: 8px; color: var(--accent-yellow); font-family: 'Orbitron', monospace;
+    font-size: .75rem; text-decoration: none; letter-spacing: 1px; transition: all .3s;
+}
+.dashboard-link:hover { background: rgba(255,230,0,.25); box-shadow: 0 0 15px rgba(255, 230, 0, 0.4); }
+
+/* ─── GAME SCREEN ─── */
+#game-screen { justify-content: center; }
+#round-indicator {
+    position: absolute; top: 24px; left: 50%; transform: translateX(-50%); z-index: 20;
+    font-family: 'Orbitron', monospace; font-size: 1rem; color: var(--accent-cyan);
+    letter-spacing: 3px; background: rgba(0,0,0,.6); padding: 8px 20px; border-radius: 20px;
+    border: 1px solid rgba(0,245,255,.3); box-shadow: 0 0 15px rgba(0,245,255,.2);
 }
 
-@keyframes slideUp {
-    0% { opacity: 0; transform: translateY(24px); }
-    100% { opacity: 1; transform: translateY(0); }
+/* Arena Mengetik */
+.typing-arena {
+    width: 100%; max-width: 900px; background: rgba(10, 10, 15, 0.7);
+    border: 1px solid rgba(0, 245, 255, 0.3); border-radius: 14px; padding: 40px;
+    backdrop-filter: blur(12px); z-index: 20; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
+#sentence-display {
+    font-family: 'Fira Code', monospace; font-size: 1.6rem; line-height: 1.6; 
+    color: rgba(255,255,255,0.3); margin-bottom: 30px;
+}
+#sentence-display .correct { color: #fff; text-shadow: 0 0 8px rgba(255,255,255,0.6); }
+#sentence-display .wrong { color: var(--accent-pink); border-bottom: 2px solid var(--accent-pink); background: rgba(255,45,117,0.15); }
 
-/* ─── Pixel Card ────────────────────────────────────── */
-.pixel-card {
-    background: linear-gradient(145deg, #12122aee, #0e0e24ee);
-    border: 2px solid #2a2a5a;
-    border-radius: 4px;
-    box-shadow:
-        0 0 0 2px #08081a,
-        inset 0 1px 0 rgba(255,255,255,0.04),
-        0 8px 32px rgba(0,0,0,0.5);
-    backdrop-filter: blur(8px);
-    position: relative;
-    overflow: hidden;
+#typing-input {
+    width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.2);
+    padding: 18px 20px; border-radius: 8px; color: var(--accent-cyan); 
+    font-family: 'Fira Code', monospace; font-size: 1.3rem; transition: all 0.3s;
 }
-.pixel-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, #00ff88, #7b5eff, #00d4ff);
-    opacity: 0.6;
-}
+#typing-input:focus { outline: none; border-color: var(--accent-cyan); box-shadow: 0 0 20px rgba(0,245,255,.2); background: rgba(0,245,255,.05); }
 
-/* ─── Pixel Input ───────────────────────────────────── */
-.pixel-input {
-    background: #08081a;
-    border: 2px solid #2a2a5a;
-    border-radius: 2px;
-    padding: 12px 16px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 14px;
-    color: #e0e0ff;
-    outline: none;
-    transition: border-color 0.2s, box-shadow 0.2s;
+/* Progress Pemain (Kanan Atas) */
+#score-panel {
+    position: absolute; top: 24px; right: 24px; z-index: 20; 
+    display: flex; flex-direction: column; gap: 8px; width: 280px;
 }
-.pixel-input:focus {
-    border-color: #00ff88;
-    box-shadow: 0 0 0 3px rgba(0, 255, 136, 0.15), 0 0 12px rgba(0, 255, 136, 0.1);
-}
-.pixel-input::placeholder {
-    color: #5a5a8a;
-}
+.prog-row { background: rgba(0,0,0,.7); border: 1px solid rgba(255,255,255,.1); padding: 10px 15px; border-radius: 8px; backdrop-filter: blur(5px); }
+.prog-name { font-size: 0.9rem; color: #fff; margin-bottom: 6px; display: flex; justify-content: space-between; font-weight: 600; letter-spacing: 1px;}
+.prog-track { width: 100%; height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; }
+.prog-fill { height: 100%; background: rgba(255,255,255,0.5); transition: width 0.2s linear; }
+.me-prog { border-color: var(--accent-green); background: rgba(0, 255, 136, 0.05); }
+.me-prog .prog-fill { background: var(--accent-green); box-shadow: 0 0 10px var(--accent-green); }
+.me-prog .prog-name { color: var(--accent-green); }
 
-/* ─── Pixel Textarea ────────────────────────────────── */
-.pixel-textarea {
-    background: #08081a;
-    border: 2px solid #2a2a5a;
-    border-radius: 2px;
-    padding: 12px 16px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 16px;
-    line-height: 1.6;
-    color: #e0e0ff;
-    outline: none;
-    resize: none;
-    transition: border-color 0.2s, box-shadow 0.2s;
+/* Statistik Live (Bawah) */
+#stats-panel {
+    position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+    z-index: 20; display: flex; gap: 15px; flex-wrap: wrap; justify-content: center;
 }
-.pixel-textarea:focus {
-    border-color: #7b5eff;
-    box-shadow: 0 0 0 3px rgba(123, 94, 255, 0.15), 0 0 12px rgba(123, 94, 255, 0.1);
+.stat-card {
+    background: rgba(0,0,0,.7); border: 1px solid rgba(0,245,255,.25);
+    border-radius: 12px; padding: 12px 25px; min-width: 140px; text-align: center; backdrop-filter: blur(10px);
 }
-.pixel-textarea::placeholder {
-    color: #5a5a8a;
-}
+.stat-label { font-family: 'Orbitron', monospace; font-size: .75rem; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; }
+.stat-value { font-family: 'Orbitron', monospace; font-size: 2rem; font-weight: 700; color: #fff; text-shadow: 0 0 10px rgba(255,255,255,0.3); }
+.stat-unit { font-size: .8rem; color: rgba(255,255,255,.5); margin-left: 4px; }
 
-/* ─── Pixel Buttons ─────────────────────────────────── */
-.pixel-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 12px 28px;
-    border: 2px solid;
-    border-radius: 2px;
-    cursor: pointer;
-    transition: all 0.15s;
-    position: relative;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+/* ─── Result & Final Screens ─── */
+.result-box {
+    background: var(--bg-card); border: 1px solid var(--accent-cyan); border-radius: 16px;
+    padding: 40px; backdrop-filter: blur(15px); max-width: 900px; width: 100%; z-index: 30;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.6); text-align: center;
 }
-.pixel-btn:active {
-    transform: translateY(2px);
+table { width: 100%; border-collapse: collapse; margin-top: 25px; text-align: left; }
+th { 
+    font-family: 'Orbitron', monospace; color: var(--accent-cyan); padding: 12px 15px; 
+    border-bottom: 1px solid rgba(0,245,255,0.3); font-size: 0.9rem; letter-spacing: 2px; text-transform: uppercase;
 }
+td { font-family: 'Fira Code', monospace; padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 1.1rem; }
+tr:hover td { background: rgba(0, 245, 255, 0.05); }
 
-.pixel-btn-primary {
-    background: linear-gradient(180deg, #0d3322, #08201a);
-    border-color: #00ff88;
-    color: #00ff88;
-    box-shadow:
-        0 0 12px rgba(0, 255, 136, 0.2),
-        inset 0 1px 0 rgba(0, 255, 136, 0.1);
-}
-.pixel-btn-primary:hover {
-    background: linear-gradient(180deg, #124a30, #0c3425);
-    box-shadow:
-        0 0 20px rgba(0, 255, 136, 0.35),
-        inset 0 1px 0 rgba(0, 255, 136, 0.15);
-}
+/* Utility */
+.mt-10 { margin-top: 10px; }
 
-/* ─── Pixel Badge ───────────────────────────────────── */
-.pixel-badge {
-    display: inline-flex;
-    align-items: center;
-    background: #12122aee;
-    border: 1px solid #2a2a5a;
-    border-radius: 2px;
-    padding: 6px 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-}
-
-/* ─── Pixel Stat Card ───────────────────────────────── */
-.pixel-stat-card {
-    background: #0e0e24;
-    border: 1px solid #2a2a5a;
-    border-radius: 2px;
-    padding: 10px 8px;
-    text-align: center;
-    transition: border-color 0.3s;
-}
-.pixel-stat-card:hover {
-    border-color: #3a3a6a;
-}
-
-/* ─── Progress Track ────────────────────────────────── */
-.pixel-progress-track {
-    height: 8px;
-    background: #08081a;
-    border: 1px solid #2a2a5a;
-    border-radius: 1px;
-    overflow: hidden;
-    position: relative;
-}
-.pixel-progress-fill {
-    height: 100%;
-    border-radius: 1px;
-    transition: width 0.2s ease-out;
-    position: relative;
-}
-.pixel-progress-fill::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: repeating-linear-gradient(
-        90deg,
-        transparent 0px,
-        transparent 3px,
-        rgba(0,0,0,0.15) 3px,
-        rgba(0,0,0,0.15) 4px
-    );
-}
-
-/* ─── Sentence Character Classes ────────────────────── */
-.char-correct {
-    color: #00ff88;
-    text-shadow: 0 0 4px rgba(0, 255, 136, 0.3);
-}
-.char-incorrect {
-    color: #ff3366;
-    background: rgba(255, 51, 102, 0.15);
-    border-radius: 1px;
-    text-shadow: 0 0 4px rgba(255, 51, 102, 0.3);
-}
-.char-current {
-    border-bottom: 2px solid #00d4ff;
-    animation: pixelBlink 0.6s steps(1) infinite;
-}
-@keyframes pixelBlink {
-    0%, 49% { border-color: #00d4ff; }
-    50%, 100% { border-color: transparent; }
-}
-.char-untyped {
-    color: #5a5a8a;
-}
-
-/* ─── Player Progress Row ───────────────────────────── */
-.player-progress-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 0;
-}
-.player-progress-name {
-    font-family: 'Press Start 2P', cursive;
-    font-size: 8px;
-    color: #e0e0ff;
-    white-space: nowrap;
-    width: 100px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.player-progress-bar-track {
-    flex: 1;
-    height: 10px;
-    background: #08081a;
-    border: 1px solid #2a2a5a;
-    border-radius: 1px;
-    overflow: hidden;
-    position: relative;
-}
-.player-progress-bar-fill {
-    height: 100%;
-    border-radius: 1px;
-    transition: width 0.3s ease-out;
-    position: relative;
-}
-.player-progress-wpm {
-    font-family: 'Press Start 2P', cursive;
-    font-size: 8px;
-    color: #7b5eff;
-    width: 60px;
-    text-align: right;
-}
-
-/* ─── Color classes for different players ─────────── */
-.player-color-0 .player-progress-bar-fill { background: #00ff88; }
-.player-color-1 .player-progress-bar-fill { background: #00d4ff; }
-.player-color-2 .player-progress-bar-fill { background: #7b5eff; }
-.player-color-3 .player-progress-bar-fill { background: #ff8833; }
-.player-color-4 .player-progress-bar-fill { background: #ff3366; }
-.player-color-5 .player-progress-bar-fill { background: #ffcc00; }
-
-/* ─── Player Avatars in Lobby ───────────────────────── */
-.player-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: #16163a;
-    border: 1px solid #2a2a5a;
-    border-radius: 2px;
-    padding: 6px 12px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    color: #e0e0ff;
-    animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.player-chip .dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #00ff88;
-    box-shadow: 0 0 6px #00ff88;
-}
-
-/* ─── Standings Row ─────────────────────────────────── */
-.standing-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: #0e0e24;
-    border: 1px solid #2a2a5a;
-    border-radius: 2px;
-    padding: 8px 14px;
-}
-.standing-row.gold {
-    border-color: #ffcc0088;
-    background: linear-gradient(90deg, rgba(255,204,0,0.08), transparent);
-}
-.standing-row.silver {
-    border-color: #c0c0c088;
-}
-.standing-row.bronze {
-    border-color: #cd7f3288;
-}
-
-/* ─── Results Table ─────────────────────────────────── */
-#round-results-body tr {
-    border-bottom: 1px solid #1a1a3a;
-}
-#round-results-body td {
-    padding: 8px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-}
-#final-standings-body tr {
-    border-bottom: 1px solid #1a1a3a;
-}
-#final-standings-body td {
-    padding: 8px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-}
-
-/* ─── Player Stat Panel (Game Over) ─────────────────── */
-.stat-panel {
-    background: #0e0e24;
-    border: 1px solid #2a2a5a;
-    border-radius: 2px;
-    padding: 14px;
-    text-align: left;
-}
-.stat-panel-header {
-    font-family: 'Press Start 2P', cursive;
-    font-size: 10px;
-    color: #00d4ff;
-    margin-bottom: 10px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #2a2a5a;
-}
-.stat-row {
-    display: flex;
-    justify-content: space-between;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    padding: 3px 0;
-}
-.stat-label {
-    color: #5a5a8a;
-}
-.stat-value {
-    color: #e0e0ff;
-}
-.stat-improved {
-    color: #00ff88;
-}
-.stat-declined {
-    color: #ff3366;
-}
-
-/* ─── DNF Tag ───────────────────────────────────────── */
-.dnf-tag {
-    font-family: 'Press Start 2P', cursive;
-    font-size: 8px;
-    color: #ff3366;
-    background: rgba(255, 51, 102, 0.1);
-    border: 1px solid rgba(255, 51, 102, 0.3);
-    padding: 2px 6px;
-    border-radius: 1px;
-}
-
-/* ─── Toast / Notification ──────────────────────────── */
-.toast {
-    position: fixed;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 1000;
-    background: #12122aee;
-    border: 1px solid #2a2a5a;
-    border-radius: 2px;
-    padding: 10px 20px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    color: #e0e0ff;
-    backdrop-filter: blur(8px);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-    animation: slideDown 0.3s ease-out;
-}
-.toast.toast-error {
-    border-color: #ff3366;
-    color: #ff3366;
-}
-.toast.toast-success {
-    border-color: #00ff88;
-    color: #00ff88;
-}
-
-@keyframes slideDown {
-    0% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
-    100% { opacity: 1; transform: translateX(-50%) translateY(0); }
-}
-
-/* ─── Responsive ────────────────────────────────────── */
-@media (max-width: 640px) {
-    .grid-cols-4 {
-        grid-template-columns: repeat(2, 1fr) !important;
-    }
-    .player-progress-name {
-        width: 70px;
-        font-size: 7px;
-    }
+@media (max-width: 768px) {
+    .typing-arena { padding: 20px; }
+    #sentence-display { font-size: 1.2rem; }
+    #score-panel { position: relative; top: 0; right: 0; width: 100%; max-width: 400px; margin-top: 60px; margin-bottom: 20px; }
+    #stats-panel { position: relative; bottom: 0; margin-top: 20px; }
 }
