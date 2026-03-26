@@ -83,18 +83,14 @@
             DOM.playerListContainer.classList.remove('hidden');
             DOM.playerCount.textContent = `(${players.length}/5)`;
             
-            // Render list pemain (Dengan Try-Catch Anti-Crash)
             try {
                 DOM.playerList.innerHTML = players.map(p => 
                     `<li class="${p.username === myUsername ? 'me' : ''}">
                         ${p.username === myUsername ? '👉 ' : '👤 '} ${escapeHtml(p.username)}
                     </li>`
                 ).join('');
-            } catch(e) {
-                console.error("Gagal render daftar nama:", e);
-            }
+            } catch(e) { console.error("Gagal render daftar nama:", e); }
 
-            // LOGIKA TOMBOL MULAI
             const isReadyToStart = (data.mode === 'solo') || (players.length >= 2);
             
             if (isReadyToStart) {
@@ -129,6 +125,7 @@
         renderSentence('', currentSentence);
         showScreen(DOM.screenGame);
         
+        // Langsung fokus ke tempat ngetik
         setTimeout(() => DOM.typingInput.focus(), 100);
     }
 
@@ -152,26 +149,26 @@
         showScreen(DOM.screenFinal);
     }
 
-    // ─── UI RENDERING ────────────────────────────────
+    // ─── UI RENDERING (MONKEYTYPE STYLE) ─────────────
     function renderPlayerProgress(players) {
         let opponentsHtml = '';
         players.forEach(p => {
-            const pct = Math.min(100, Math.round(p.progress));
+            const pct = Math.min(100, Math.max(0, p.progress));
             const wpm = p.wpm ? Math.round(p.wpm) : 0;
             const isMe = p.username === myUsername;
 
             if (isMe) {
                 DOM.myProgressBar.style.width = `${pct}%`;
-                DOM.myProgressLabel.textContent = `${pct}%`;
+                DOM.myProgressLabel.textContent = `${Math.round(pct)}%`;
                 DOM.hudWpm.textContent = wpm;
                 
                 if (p.selesai && !isFinished) {
                     isFinished = true;
                     DOM.typingInput.disabled = true;
-                    DOM.typingInput.value = "Menunggu pemain lain selesai...";
+                    DOM.typingInput.blur(); // Matikan kursor berkedip
                 }
             } else {
-                const status = p.selesai ? 'DONE' : `${pct}%`;
+                const status = p.selesai ? 'DONE' : `${Math.round(pct)}%`;
                 opponentsHtml += `
                 <div class="prog-row">
                     <div class="prog-name"><span>${escapeHtml(p.username)}</span> <span>${status}</span></div>
@@ -185,13 +182,20 @@
     function renderSentence(typed, sentence) {
         let html = '';
         for (let i = 0; i < sentence.length; i++) {
-            const ch = sentence[i] === ' ' ? '&nbsp;' : escapeHtml(sentence[i]);
+            // FIX SPASI: Biarkan spasi alami agar CSS pre-wrap bekerja
+            const ch = sentence[i] === ' ' ? ' ' : escapeHtml(sentence[i]);
+            let spanClass = '';
+            
             if (i < typed.length) {
-                if (typed[i] === sentence[i]) html += `<span class="correct">${ch}</span>`;
-                else html += `<span class="wrong">${ch}</span>`;
-            } else {
-                html += `<span>${ch}</span>`;
+                spanClass = (typed[i] === sentence[i]) ? 'correct' : 'wrong';
             }
+            
+            // KURSOR: Letakkan kelas .current persis di huruf berikutnya
+            if (i === typed.length && !isFinished) {
+                spanClass += ' current';
+            }
+            
+            html += `<span class="${spanClass}">${ch}</span>`;
         }
         DOM.sentenceDisplay.innerHTML = html;
     }
@@ -214,7 +218,14 @@
 
     function onTypingInput() {
         if (isFinished) return;
-        const typed = DOM.typingInput.value;
+        
+        let typed = DOM.typingInput.value;
+        // Cegah ketik berlebihan yang melampaui kalimat
+        if (typed.length > currentSentence.length) {
+            typed = typed.substring(0, currentSentence.length);
+            DOM.typingInput.value = typed;
+        }
+        
         renderSentence(typed, currentSentence);
         send({ type: 'INPUT', typedText: typed });
     }
@@ -257,7 +268,6 @@
         if (e.key === 'Enter') doJoin('multi');
     });
     
-    // Tombol Mulai Manual
     if (DOM.btnStartManual) {
         DOM.btnStartManual.addEventListener('click', () => {
             DOM.btnStartManual.disabled = true;
@@ -270,6 +280,13 @@
     DOM.typingInput.addEventListener('paste', (e) => {
         e.preventDefault();
         alert('Dilarang copas curang!');
+    });
+
+    // Auto-focus ketika area sentence di-klik
+    DOM.sentenceDisplay.parentElement.addEventListener('click', () => {
+        if (!DOM.typingInput.disabled) {
+            DOM.typingInput.focus();
+        }
     });
 
     // ─── INIT ────────────────────────────────────────
