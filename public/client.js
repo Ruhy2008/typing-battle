@@ -1,13 +1,9 @@
-/* =======================================================
-   Typing Battle — Pixel Arena — Client JS
-   WebSocket client for the PHP Ratchet backend
-   ======================================================= */
-
 (() => {
     'use strict';
 
-    // ─── Config ──────────────────────────────────────
-    const WS_URL = `ws://${location.hostname}:8080`;
+    const RAILWAY_URL = 'wss://typing-battle-production.up.railway.app'; 
+    const IS_LOCAL    = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    const WS_URL      = IS_LOCAL ? `ws://${location.hostname}:8080` : RAILWAY_URL;
     const PROGRESS_THROTTLE_MS = 100;
 
     // ─── DOM Cache ───────────────────────────────────
