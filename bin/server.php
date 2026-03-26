@@ -1,10 +1,4 @@
 <?php
-/**
- * Typing Battle — WebSocket Server Entry Point
- * 
- * Boots the Ratchet WebSocket server on port 8080.
- * Usage: php bin/server.php
- */
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
@@ -34,7 +28,8 @@ use Ratchet\Http\HttpServer;
 use Ratchet\WebSocket\WsServer;
 use TypingBattle\Logic;
 
-$port = (int) (getenv('WS_PORT') ?: 8080);
+// Railway injects PORT, fallback ke WS_PORT lalu 8080
+$port = (int)(getenv('PORT') ?: getenv('WS_PORT') ?: 8080);
 
 $server = IoServer::factory(
     new HttpServer(
@@ -42,7 +37,8 @@ $server = IoServer::factory(
             new Logic()
         )
     ),
-    $port
+    $port,
+    '0.0.0.0'   // WAJIB: bind ke semua interface agar Railway bisa akses
 );
 
 echo "===================================\n";
