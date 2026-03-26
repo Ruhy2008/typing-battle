@@ -247,6 +247,17 @@ class Logic implements MessageComponentInterface
             } catch (\Exception $e) {
                 echo "Gagal simpan ke DB: " . $e->getMessage() . "\n";
             }
+            try {
+                // 1. (Leaderboard)
+                upsertPlayerStats($p['username'], $skor_akhir, $wpm, $errorRate, $wpm);
+                
+                // 2. (ROUND LOGS)
+                $waktu_terpakai = 60 - $room['waktu_sisa'];
+                saveRoundLog($id_room, 1, $p['username'], $wpm, $errorRate, $waktu_terpakai, $room['kalimat']);
+                
+            } catch (\Exception $e) {
+                echo "Gagal simpan ke DB: " . $e->getMessage() . "\n";
+            }
         }
         usort($standings, fn($a, $b) => $b['totalScore'] - $a['totalScore']);
 
