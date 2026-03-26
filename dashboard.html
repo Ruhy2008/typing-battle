@@ -97,10 +97,10 @@
 <a class="back" href="index.html">← Kembali ke Game</a>
 
 <script>
-// ══════════════════════════════════════════════════════════
-// Config
-// ══════════════════════════════════════════════════════════
-const SERVER_URL = 'ws://localhost:8080'; // Ganti saat deploy Railway
+
+const RAILWAY_URL = 'wss://typing-battle-production.up.railway.app'; 
+const IS_LOCAL    = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+const SERVER_URL  = IS_LOCAL ? 'ws://localhost:8080' : RAILWAY_URL;
 const COLORS = ['#7c6af7','#4ade80','#f87171','#fbbf24','#38bdf8'];
 
 let charts = {};
