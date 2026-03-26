@@ -1,414 +1,585 @@
-// client.js — Frontend Logic (Fairuz)
+(() => {
+    'use strict';
 
-// ══════════════════════════════════════════════════════════
-// Konfigurasi Server
-// ══════════════════════════════════════════════════════════
-// Lokal:   ws://localhost:8080
-// Railway: wss://typing-battle-XXXX.up.railway.app
-const SERVER_URL = 'ws://localhost:8080';
+    const RAILWAY_URL = 'wss://typing-battle-production.up.railway.app'; 
+    const IS_LOCAL    = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    const WS_URL      = IS_LOCAL ? `ws://${location.hostname}:8080` : RAILWAY_URL;
+    const PROGRESS_THROTTLE_MS = 100;
 
-// ══════════════════════════════════════════════════════════
-// State Global
-// ══════════════════════════════════════════════════════════
-let ws            = null;
-let myUsername    = '';
-let currentSentence = '';
-let startTime     = null;
-let timerInterval = null;
-let wpmInterval   = null;
-let timeLeft      = 60;
-let gameFinished  = false;
-let currentRound  = 0;
+    // ─── DOM Cache ───────────────────────────────────
+    const $  = (sel) => document.querySelector(sel);
+    const $$ = (sel) => document.querySelectorAll(sel);
 
-// ══════════════════════════════════════════════════════════
-// DOM Helpers
-// ══════════════════════════════════════════════════════════
-const screen       = (id) => document.getElementById(id);
-const showScreen   = (id) => {
-    ['lobby-screen', 'game-screen', 'result-screen', 'final-screen'].forEach(s => {
-        document.getElementById(s).classList.add('hidden');
-    });
-    document.getElementById(id).classList.remove('hidden');
-};
+    const DOM = {
+        // Screens
+        screenJoin:        $('#screen-join'),
+        screenCountdown:   $('#screen-countdown'),
+        screenPlaying:     $('#screen-playing'),
+        screenRoundResult: $('#screen-round-result'),
+        screenGameOver:    $('#screen-game-over'),
 
-// ══════════════════════════════════════════════════════════
-// WebSocket
-// ══════════════════════════════════════════════════════════
-function connectWS() {
-    ws = new WebSocket(SERVER_URL);
+        // Join
+        inputUsername:   $('#input-username'),
+        btnJoin:         $('#btn-join'),
+        joinError:       $('#join-error'),
+        lobbyPlayers:    $('#lobby-players'),
+        playerListLobby: $('#player-list-lobby'),
 
-    ws.onopen = () => {
-        console.log('[WS] Terhubung ke server.');
-        addLog('Terhubung ke server!', 'success');
+        // Countdown
+        countdownNumber: $('#countdown-number'),
+
+        // Playing
+        hudRound:       $('#hud-round'),
+        hudTimer:       $('#hud-timer'),
+        sentenceDisplay:$('#sentence-display'),
+        typingInput:    $('#typing-input'),
+        liveRawWpm:     $('#live-raw-wpm'),
+        liveNetWpm:     $('#live-net-wpm'),
+        liveAccuracy:   $('#live-accuracy'),
+        liveErrors:     $('#live-errors'),
+        accuracyGauge:  $('#accuracy-gauge'),
+        playerProgressContainer: $('#player-progress-container'),
+
+        // Round Result
+        roundResultTitle: $('#round-result-title'),
+        roundResultsBody: $('#round-results-body'),
+        roundStandings:   $('#round-standings'),
+
+        // Game Over
+        winnerName:        $('#winner-name'),
+        finalStandingsBody:$('#final-standings-body'),
+        playerStatsPanels: $('#player-stats-panels'),
+        btnPlayAgain:      $('#btn-play-again'),
+
+        // Connection
+        wsStatusDot:  $('#ws-status-dot'),
+        wsStatusText: $('#ws-status-text'),
     };
 
-    ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        handleMessage(data);
-    };
+    // ─── State ───────────────────────────────────────
+    let ws = null;
+    let myUsername = '';
+    let currentSentence = '';
+    let typingStartTime = 0;
+    let lastProgressSend = 0;
+    let isFinished = false;
+    let roundActive = false;
 
-    ws.onclose = () => {
-        console.log('[WS] Koneksi terputus.');
-        addLog('Koneksi terputus dari server.', 'error');
-    };
+    // ─── Sounds (Web Audio API — tiny beeps) ─────────
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
 
-    ws.onerror = (err) => {
-        console.error('[WS] Error:', err);
-        addLog('Gagal terhubung ke server.', 'error');
-    };
-}
-
-function sendMsg(obj) {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify(obj));
-    }
-}
-
-// ══════════════════════════════════════════════════════════
-// Message Handler
-// ══════════════════════════════════════════════════════════
-function handleMessage(data) {
-    console.log('[MSG]', data);
-    switch (data.type) {
-        case 'SYSTEM':
-            addLog(data.message, 'info');
-            break;
-        case 'ERROR':
-            addLog('ERROR: ' + data.message, 'error');
-            break;
-        case 'PLAYER_LIST':
-            renderPlayerList(data.players);
-            break;
-        case 'START_GAME':
-            addLog('Game dimulai! Bersiap...', 'success');
-            break;
-        case 'ROUND_START':
-            startRound(data);
-            break;
-        case 'PROGRESS_UPDATE':
-            updateOpponentProgress(data.username, data.progress);
-            break;
-        case 'PLAYER_FINISHED':
-            addLog(`${data.username} selesai! WPM: ${data.wpm} | Error: ${data.errorRate}%`, 'info');
-            break;
-        case 'ROUND_END':
-            showRoundResult(data);
-            break;
-        case 'GAME_OVER':
-            showFinalResult(data.stats);
-            break;
-        case 'LEADERBOARD':
-            renderLeaderboard(data.data);
-            break;
-    }
-}
-
-// ══════════════════════════════════════════════════════════
-// Lobby
-// ══════════════════════════════════════════════════════════
-function joinGame() {
-    const usernameInput = document.getElementById('username-input');
-    myUsername = usernameInput.value.trim();
-    if (!myUsername) {
-        alert('Masukkan username dulu!');
-        return;
-    }
-    if (myUsername.length > 20) {
-        alert('Username maks 20 karakter!');
-        return;
-    }
-    connectWS();
-    setTimeout(() => {
-        sendMsg({ type: 'JOIN', username: myUsername });
-    }, 500);
-    document.getElementById('join-btn').disabled = true;
-    addLog(`Bergabung sebagai ${myUsername}...`, 'info');
-}
-
-function renderPlayerList(players) {
-    const list = document.getElementById('player-list');
-    list.innerHTML = '';
-    players.forEach(p => {
-        const li = document.createElement('li');
-        li.textContent = `${p.username} — Skor: ${p.score}`;
-        if (p.username === myUsername) li.classList.add('me');
-        list.appendChild(li);
-    });
-    document.getElementById('player-count').textContent = `${players.length} / 2 pemain`;
-}
-
-// ══════════════════════════════════════════════════════════
-// Game Screen
-// ══════════════════════════════════════════════════════════
-function startRound(data) {
-    currentRound    = data.round;
-    currentSentence = data.sentence;
-    timeLeft        = data.timeLimit;
-    gameFinished    = false;
-    startTime       = null;
-
-    showScreen('game-screen');
-
-    document.getElementById('round-label').textContent = `Ronde ${currentRound} / 5`;
-    document.getElementById('timer-display').textContent = timeLeft;
-    document.getElementById('wpm-display').textContent = '0';
-    document.getElementById('typing-input').value = '';
-    document.getElementById('typing-input').disabled = false;
-    document.getElementById('typing-input').focus();
-
-    renderSentence(currentSentence);
-
-    // Reset progress bar diri sendiri
-    setProgress(myUsername, 0);
-
-    // Mulai countdown timer
-    clearInterval(timerInterval);
-    timerInterval = setInterval(() => {
-        timeLeft--;
-        document.getElementById('timer-display').textContent = timeLeft;
-        if (timeLeft <= 0) {
-            clearInterval(timerInterval);
-            if (!gameFinished) finishTyping(true);
+    function initAudio() {
+        if (!audioCtx) {
+            try { audioCtx = new AudioCtx(); } catch (_) {}
         }
-    }, 1000);
-
-    addLog(`Ronde ${currentRound} dimulai! Mulai mengetik...`, 'success');
-}
-
-function renderSentence(sentence) {
-    const el = document.getElementById('sentence-display');
-    el.innerHTML = sentence.split('').map((ch, i) =>
-        `<span id="char-${i}">${ch === ' ' ? '&nbsp;' : ch}</span>`
-    ).join('');
-}
-
-function onTyping() {
-    const input    = document.getElementById('typing-input').value;
-    const sentence = currentSentence;
-
-    if (!startTime && input.length > 0) {
-        startTime = Date.now();
     }
 
-    if (gameFinished) return;
+    function playBeep(freq = 660, duration = 0.06, vol = 0.08) {
+        if (!audioCtx) return;
+        try {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'square';
+            osc.frequency.value = freq;
+            gain.gain.value = vol;
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+            osc.connect(gain).connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        } catch (_) {}
+    }
 
-    // Warna karakter
-    for (let i = 0; i < sentence.length; i++) {
-        const span = document.getElementById(`char-${i}`);
-        if (!span) continue;
-        if (i < input.length) {
-            span.className = input[i] === sentence[i] ? 'correct' : 'wrong';
+    function sfxType()   { playBeep(880, 0.04, 0.04); }
+    function sfxError()  { playBeep(220, 0.12, 0.1); }
+    function sfxFinish() { playBeep(1320, 0.15, 0.08); }
+    function sfxRound()  { playBeep(660, 0.2, 0.06); }
+
+    // ─── Screen Management ───────────────────────────
+    function showScreen(screenEl) {
+        $$('.screen').forEach(s => s.classList.remove('active'));
+        screenEl.classList.add('active');
+    }
+
+    // ─── Toast Notification ──────────────────────────
+    function showToast(msg, type = 'info', duration = 3000) {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type === 'error' ? 'toast-error' : type === 'success' ? 'toast-success' : ''}`;
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s';
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
+    }
+
+    // ─── WebSocket ───────────────────────────────────
+    function connect() {
+        ws = new WebSocket(WS_URL);
+
+        ws.onopen = () => {
+            DOM.wsStatusDot.style.background = '#00ff88';
+            DOM.wsStatusDot.style.boxShadow = '0 0 6px #00ff88';
+            DOM.wsStatusText.textContent = 'CONNECTED';
+        };
+
+        ws.onclose = () => {
+            DOM.wsStatusDot.style.background = '#ff3366';
+            DOM.wsStatusDot.style.boxShadow = '0 0 6px #ff3366';
+            DOM.wsStatusText.textContent = 'DISCONNECTED';
+
+            // Auto-reconnect after 3s
+            setTimeout(connect, 3000);
+        };
+
+        ws.onerror = () => {
+            showToast('Connection error', 'error');
+        };
+
+        ws.onmessage = (event) => {
+            let data;
+            try { data = JSON.parse(event.data); } catch { return; }
+            handleMessage(data);
+        };
+    }
+
+    function send(data) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(data));
+        }
+    }
+
+    // ─── Message Router ──────────────────────────────
+    function handleMessage(data) {
+        switch (data.type) {
+            case 'PLAYER_LIST':    onPlayerList(data);      break;
+            case 'START_GAME':     onStartGame(data);       break;
+            case 'PHASE_CHANGE':   onPhaseChange(data);     break;
+            case 'ROUND_START':    onRoundStart(data);      break;
+            case 'TIMER_UPDATE':   onTimerUpdate(data);     break;
+            case 'GAME_STATE':     onGameState(data);       break;
+            case 'PLAYER_FINISHED':onPlayerFinished(data);  break;
+            case 'ROUND_END':      onRoundEnd(data);        break;
+            case 'GAME_OVER':      onGameOver(data);        break;
+            case 'ERROR':          onError(data);           break;
+        }
+    }
+
+    // ─── Event Handlers ──────────────────────────────
+
+    function onPlayerList(data) {
+        const players = data.players || [];
+        DOM.playerListLobby.innerHTML = players.map(p =>
+            `<div class="player-chip">
+                <span class="dot"></span>
+                ${escapeHtml(p.username)}
+            </div>`
+        ).join('');
+        DOM.lobbyPlayers.classList.remove('hidden');
+    }
+
+    function onStartGame(data) {
+        showScreen(DOM.screenCountdown);
+        sfxRound();
+
+        // 3-second countdown
+        let count = 3;
+        DOM.countdownNumber.textContent = count;
+        const iv = setInterval(() => {
+            count--;
+            if (count > 0) {
+                DOM.countdownNumber.textContent = count;
+                sfxRound();
+            } else {
+                clearInterval(iv);
+            }
+        }, 1000);
+    }
+
+    function onPhaseChange(data) {
+        // Phase changes are mostly handled by specific events
+        // But this ensures we're in sync if something odd happens
+    }
+
+    function onRoundStart(data) {
+        currentSentence = data.sentence || '';
+        isFinished = false;
+        roundActive = true;
+        typingStartTime = 0;
+
+        DOM.hudRound.textContent = `${data.round}/${data.totalRounds}`;
+        DOM.hudTimer.textContent = data.timeLimit || 60;
+
+        // Render sentence with per-character spans
+        renderSentence('', currentSentence);
+
+        // Reset input
+        DOM.typingInput.value = '';
+        DOM.typingInput.disabled = false;
+
+        // Reset live stats
+        DOM.liveRawWpm.textContent = '0';
+        DOM.liveNetWpm.textContent = '0';
+        DOM.liveAccuracy.textContent = '100%';
+        DOM.liveErrors.textContent = '0';
+        updateAccuracyGauge(100);
+
+        showScreen(DOM.screenPlaying);
+        sfxRound();
+
+        // Focus the textarea
+        setTimeout(() => DOM.typingInput.focus(), 100);
+    }
+
+    function onTimerUpdate(data) {
+        const remaining = data.remaining ?? 0;
+        DOM.hudTimer.textContent = remaining;
+
+        // Flash red when low
+        if (remaining <= 5) {
+            DOM.hudTimer.style.color = '#ff3366';
+            DOM.hudTimer.style.textShadow = '0 0 8px rgba(255,51,102,0.5)';
         } else {
-            span.className = '';
+            DOM.hudTimer.style.color = '';
+            DOM.hudTimer.style.textShadow = '';
         }
     }
 
-    // Hitung progress (% karakter benar berurutan dari awal)
-    let correctCount = 0;
-    for (let i = 0; i < input.length && i < sentence.length; i++) {
-        if (input[i] === sentence[i]) correctCount++;
-        else break;
-    }
-    const progress = Math.round((correctCount / sentence.length) * 100);
-    setProgress(myUsername, progress);
-
-    // Live WPM
-    if (startTime) {
-        const wpm = calculateWPM(input, startTime);
-        document.getElementById('wpm-display').textContent = Math.min(wpm, 300);
+    function onGameState(data) {
+        const players = data.players || [];
+        renderPlayerProgress(players);
     }
 
-    // Kirim progress ke server
-    sendMsg({
-        type:     'PROGRESS',
-        username: myUsername,
-        typed:    input,
-        progress: progress,
-    });
-
-    // Cek selesai
-    if (input === sentence) {
-        finishTyping(false);
+    function onPlayerFinished(data) {
+        if (data.username === myUsername) return;
+        showToast(`${data.username} finished!`, 'info', 2000);
     }
-}
 
-function finishTyping(isTimeout) {
-    if (gameFinished) return;
-    gameFinished = true;
-    clearInterval(timerInterval);
+    function onRoundEnd(data) {
+        roundActive = false;
+        DOM.typingInput.disabled = true;
 
-    document.getElementById('typing-input').disabled = true;
+        DOM.roundResultTitle.textContent = `Round ${data.round} Results`;
 
-    const typed    = document.getElementById('typing-input').value;
-    const timeSec  = startTime ? ((Date.now() - startTime) / 1000) : 60;
-    const wpm      = calculateWPM(typed, startTime || (Date.now() - 60000));
-    const errorRate = calculateErrorRate(typed, currentSentence);
+        // Results table
+        const results = data.results || [];
+        // Sort by score descending
+        const sorted = [...results].sort((a, b) => b.score - a.score);
 
-    // Validasi client-side
-    const safeWpm = Math.min(wpm, 300);
+        DOM.roundResultsBody.innerHTML = sorted.map((r, i) => {
+            const rank = i + 1;
+            const dnfLabel = r.dnf ? '<span class="dnf-tag">DNF</span>' : '';
+            return `<tr>
+                <td class="font-pixel text-[10px] text-pixel-muted">${rank}</td>
+                <td class="${r.username === myUsername ? 'text-pixel-primary' : ''}">${escapeHtml(r.username)} ${dnfLabel}</td>
+                <td class="text-pixel-cyan">${r.netWpm}</td>
+                <td class="text-pixel-accent">${r.accuracy}%</td>
+                <td class="text-pixel-primary">${r.score}</td>
+            </tr>`;
+        }).join('');
 
-    sendMsg({
-        type:      'FINISH',
-        username:  myUsername,
-        wpm:       safeWpm,
-        errorRate: parseFloat(errorRate),
-        timeSec:   parseFloat(timeSec.toFixed(2)),
-    });
+        // Standings
+        const standings = data.standings || [];
+        DOM.roundStandings.innerHTML = standings.map((s, i) => {
+            const cls = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
+            return `<div class="standing-row ${cls}">
+                <span class="font-pixel text-[10px] ${s.username === myUsername ? 'text-pixel-primary' : 'text-pixel-text'}">${medal} ${escapeHtml(s.username)}</span>
+                <span class="font-pixel text-[10px] text-pixel-cyan">${s.totalScore} pts</span>
+            </div>`;
+        }).join('');
 
-    addLog(isTimeout ? 'Waktu habis!' : 'Selesai mengetik! Menunggu pemain lain...', 'info');
-}
-
-function setProgress(username, pct) {
-    // Diri sendiri
-    if (username === myUsername) {
-        const bar = document.getElementById('my-progress');
-        if (bar) bar.style.width = pct + '%';
-        const label = document.getElementById('my-progress-label');
-        if (label) label.textContent = pct + '%';
-        return;
+        showScreen(DOM.screenRoundResult);
     }
-    // Pemain lain
-    const bar = document.getElementById(`progress-${username}`);
-    if (bar) bar.style.width = pct + '%';
-    const label = document.getElementById(`progress-label-${username}`);
-    if (label) label.textContent = pct + '%';
-}
 
-function updateOpponentProgress(username, progress) {
-    // Buat elemen progress jika belum ada
-    const container = document.getElementById('opponents-progress');
-    if (!container) return;
+    function onGameOver(data) {
+        roundActive = false;
 
-    let row = document.getElementById(`row-${username}`);
-    if (!row) {
-        row = document.createElement('div');
-        row.id = `row-${username}`;
-        row.className = 'progress-row';
-        row.innerHTML = `
-            <span class="progress-name">${username}</span>
-            <div class="progress-bar-wrap">
-                <div class="progress-bar" id="progress-${username}" style="width:0%"></div>
-            </div>
-            <span class="progress-pct" id="progress-label-${username}">0%</span>
-        `;
-        container.appendChild(row);
+        DOM.winnerName.textContent = data.winner || 'Nobody';
+
+        // Final standings table
+        const standings = data.finalStandings || [];
+        DOM.finalStandingsBody.innerHTML = standings.map((s, i) => {
+            const rank = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
+            return `<tr>
+                <td class="font-pixel text-[10px]">${rank}</td>
+                <td class="${s.username === myUsername ? 'text-pixel-primary' : ''}">${escapeHtml(s.username)}</td>
+                <td class="text-pixel-cyan">${s.totalScore}</td>
+                <td>${s.avgNetWpm}</td>
+                <td>${s.avgAccuracy}%</td>
+            </tr>`;
+        }).join('');
+
+        // Per-player stat panels
+        DOM.playerStatsPanels.innerHTML = standings.map(p => {
+            let deltaHTML = '';
+            if (p.firstVsLast) {
+                const fl = p.firstVsLast;
+                const wpmColor = fl.improved ? 'stat-improved' : 'stat-declined';
+                deltaHTML = `
+                    <div class="stat-row">
+                        <span class="stat-label">First → Last WPM</span>
+                        <span class="${wpmColor}">${fl.firstRound.netWpm} → ${fl.lastRound.netWpm} (${fl.wpmDelta})</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">First → Last Acc</span>
+                        <span class="${wpmColor}">${fl.firstRound.accuracy}% → ${fl.lastRound.accuracy}% (${fl.accuracyDelta})</span>
+                    </div>`;
+            }
+
+            let bestWorstHTML = '';
+            if (p.bestRound && p.worstRound) {
+                bestWorstHTML = `
+                    <div class="stat-row">
+                        <span class="stat-label">Best Round</span>
+                        <span class="stat-improved">R${p.bestRound.round} — ${p.bestRound.score} pts</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Worst Round</span>
+                        <span class="stat-declined">R${p.worstRound.round} — ${p.worstRound.score} pts</span>
+                    </div>`;
+            }
+
+            const os = p.overallStats || {};
+            return `<div class="stat-panel">
+                <div class="stat-panel-header">${escapeHtml(p.username)}</div>
+                <div class="stat-row">
+                    <span class="stat-label">Total Score</span>
+                    <span class="stat-value text-pixel-primary">${p.totalScore}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Avg Net WPM</span>
+                    <span class="stat-value">${p.avgNetWpm}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Avg Accuracy</span>
+                    <span class="stat-value">${p.avgAccuracy}%</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Avg Errors</span>
+                    <span class="stat-value">${p.avgErrors}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Total Errors</span>
+                    <span class="stat-value">${os.totalErrors ?? 0}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Rounds Played</span>
+                    <span class="stat-value">${os.roundsPlayed ?? 0}</span>
+                </div>
+                ${deltaHTML}
+                ${bestWorstHTML}
+            </div>`;
+        }).join('');
+
+        sfxFinish();
+        showScreen(DOM.screenGameOver);
     }
-    setProgress(username, progress);
-}
 
-// ══════════════════════════════════════════════════════════
-// Round Result Screen
-// ══════════════════════════════════════════════════════════
-function showRoundResult(data) {
-    clearInterval(timerInterval);
-    showScreen('result-screen');
+    function onError(data) {
+        const msg = data.message || 'Unknown error';
 
-    document.getElementById('result-round-label').textContent = `Hasil Ronde ${data.round}`;
-    const tbody = document.getElementById('result-table-body');
-    tbody.innerHTML = '';
+        // Show on join screen if we're there
+        if (DOM.screenJoin.classList.contains('active')) {
+            DOM.joinError.textContent = msg;
+            DOM.joinError.classList.remove('hidden');
+        }
 
-    data.results.forEach((r, i) => {
-        const tr = document.createElement('tr');
-        if (r.username === myUsername) tr.classList.add('highlight');
-        tr.innerHTML = `
-            <td>${i + 1}</td>
-            <td>${r.username}</td>
-            <td>${r.wpm}</td>
-            <td>${r.errorRate}%</td>
-            <td>${r.timeSec}s</td>
-            <td>${r.points}</td>
-        `;
-        tbody.appendChild(tr);
-    });
-
-    const msg = data.round < 5
-        ? `Ronde berikutnya dimulai dalam 5 detik...`
-        : `Ini ronde terakhir! Menghitung hasil akhir...`;
-    document.getElementById('result-next-msg').textContent = msg;
-}
-
-// ══════════════════════════════════════════════════════════
-// Final Screen
-// ══════════════════════════════════════════════════════════
-function showFinalResult(stats) {
-    showScreen('final-screen');
-
-    // Simpan ke localStorage untuk dashboard
-    saveToLocalStorage(stats);
-
-    const tbody = document.getElementById('final-table-body');
-    tbody.innerHTML = '';
-    stats.forEach((s, i) => {
-        const tr = document.createElement('tr');
-        if (s.username === myUsername) tr.classList.add('highlight');
-        tr.innerHTML = `
-            <td>${i + 1}</td>
-            <td>${s.username}</td>
-            <td>${s.score}</td>
-            <td>${s.avgWpm}</td>
-            <td>${s.bestWpm}</td>
-            <td>${s.avgErrorRate}%</td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
-// ══════════════════════════════════════════════════════════
-// LocalStorage (untuk Dashboard Jems)
-// ══════════════════════════════════════════════════════════
-function saveToLocalStorage(stats) {
-    const sessions = JSON.parse(localStorage.getItem('typingBattle_sessions') || '[]');
-    sessions.push({
-        timestamp: new Date().toISOString(),
-        players:   stats,
-    });
-    // Simpan max 20 sesi terakhir
-    if (sessions.length > 20) sessions.shift();
-    localStorage.setItem('typingBattle_sessions', JSON.stringify(sessions));
-    console.log('[LS] Data sesi disimpan ke localStorage.');
-}
-
-// ══════════════════════════════════════════════════════════
-// Kalkulasi WPM & Error Rate
-// ══════════════════════════════════════════════════════════
-function calculateWPM(typedText, startTimeMs) {
-    if (!startTimeMs || !typedText) return 0;
-    const minutes = (Date.now() - startTimeMs) / 60000;
-    if (minutes <= 0) return 0;
-    const words = typedText.trim().split(/\s+/).length;
-    return Math.round(words / minutes);
-}
-
-function calculateErrorRate(typed, original) {
-    if (!typed || !original) return '0.0';
-    let errors = 0;
-    for (let i = 0; i < typed.length; i++) {
-        if (typed[i] !== original[i]) errors++;
+        showToast(msg, 'error');
     }
-    return ((errors / original.length) * 100).toFixed(1);
-}
 
-// ══════════════════════════════════════════════════════════
-// Log
-// ══════════════════════════════════════════════════════════
-function addLog(msg, type = 'info') {
-    const log = document.getElementById('log-area');
-    if (!log) return;
-    const li = document.createElement('li');
-    li.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-    li.className = type;
-    log.prepend(li);
-    if (log.children.length > 30) log.removeChild(log.lastChild);
-}
+    // ─── Sentence Rendering (char-by-char) ───────────
+    function renderSentence(typed, sentence) {
+        let html = '';
+        for (let i = 0; i < sentence.length; i++) {
+            const ch = sentence[i] === ' ' ? '&nbsp;' : escapeHtml(sentence[i]);
+            if (i < typed.length) {
+                if (typed[i] === sentence[i]) {
+                    html += `<span class="char-correct">${ch}</span>`;
+                } else {
+                    html += `<span class="char-incorrect">${ch}</span>`;
+                }
+            } else if (i === typed.length) {
+                html += `<span class="char-current">${ch}</span>`;
+            } else {
+                html += `<span class="char-untyped">${ch}</span>`;
+            }
+        }
+        DOM.sentenceDisplay.innerHTML = html;
+    }
 
-// ══════════════════════════════════════════════════════════
-// Init
-// ══════════════════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('join-btn').addEventListener('click', joinGame);
-    document.getElementById('username-input').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') joinGame();
+    // ─── Accuracy Gauge ──────────────────────────────
+    function updateAccuracyGauge(accuracy) {
+        const pct = Math.max(0, Math.min(100, accuracy));
+        DOM.accuracyGauge.style.width = pct + '%';
+
+        // Color based on accuracy
+        if (pct >= 90) {
+            DOM.accuracyGauge.style.background = '#00ff88';
+        } else if (pct >= 70) {
+            DOM.accuracyGauge.style.background = '#ffcc00';
+        } else if (pct >= 50) {
+            DOM.accuracyGauge.style.background = '#ff8833';
+        } else {
+            DOM.accuracyGauge.style.background = '#ff3366';
+        }
+    }
+
+    // ─── Player Progress Bars ────────────────────────
+    function renderPlayerProgress(players) {
+        DOM.playerProgressContainer.innerHTML = players.map((p, i) => {
+            const colorIdx = i % 6;
+            const pct = Math.round(p.progress * 100);
+            const wpmLabel = p.finished ? '✓ DONE' : `${p.currentWpm || p.netWpm} wpm`;
+            const isMe = p.username === myUsername;
+            const nameClass = isMe ? 'text-pixel-primary' : '';
+            return `<div class="player-progress-row player-color-${colorIdx}">
+                <span class="player-progress-name ${nameClass}">${escapeHtml(p.username)}</span>
+                <div class="player-progress-bar-track">
+                    <div class="player-progress-bar-fill" style="width:${pct}%"></div>
+                </div>
+                <span class="player-progress-wpm">${wpmLabel}</span>
+            </div>`;
+        }).join('');
+    }
+
+    // ─── Typing Engine ───────────────────────────────
+    function onTypingInput() {
+        if (!roundActive || isFinished) return;
+
+        const typed = DOM.typingInput.value;
+
+        // Start timer on first keystroke
+        if (typingStartTime === 0 && typed.length > 0) {
+            typingStartTime = Date.now();
+        }
+
+        // Re-render sentence display
+        renderSentence(typed, currentSentence);
+
+        // Calculate local stats
+        const stats = calcLocalStats(typed);
+
+        // Update HUD
+        DOM.liveRawWpm.textContent = stats.rawWpm;
+        DOM.liveNetWpm.textContent = stats.netWpm;
+        DOM.liveAccuracy.textContent = stats.accuracy + '%';
+        DOM.liveErrors.textContent = stats.errors;
+        updateAccuracyGauge(stats.accuracy);
+
+        // Sound effects
+        if (typed.length > 0) {
+            const lastChar = typed[typed.length - 1];
+            const expectedChar = currentSentence[typed.length - 1] || '';
+            if (lastChar === expectedChar) {
+                sfxType();
+            } else {
+                sfxError();
+            }
+        }
+
+        // Throttled progress send
+        const now = Date.now();
+        if (now - lastProgressSend >= PROGRESS_THROTTLE_MS) {
+            lastProgressSend = now;
+            send({
+                type: 'PROGRESS',
+                typedText: typed,
+            });
+        }
+
+        // Check finish
+        if (typed === currentSentence) {
+            isFinished = true;
+            roundActive = false;
+            DOM.typingInput.disabled = true;
+            sfxFinish();
+
+            send({
+                type: 'FINISH',
+                typedText: typed,
+            });
+
+            showToast('You finished! 🎉', 'success', 2000);
+        }
+    }
+
+    function calcLocalStats(typed) {
+        if (typed.length === 0 || typingStartTime === 0) {
+            return { rawWpm: 0, netWpm: 0, accuracy: 100, errors: 0 };
+        }
+
+        const elapsedMin = (Date.now() - typingStartTime) / 60000;
+        if (elapsedMin <= 0) {
+            return { rawWpm: 0, netWpm: 0, accuracy: 100, errors: 0 };
+        }
+
+        const rawWpm = Math.round((typed.length / 5) / elapsedMin);
+
+        let correct = 0;
+        let errors = 0;
+        const checkLen = Math.min(typed.length, currentSentence.length);
+        for (let i = 0; i < checkLen; i++) {
+            if (typed[i] === currentSentence[i]) {
+                correct++;
+            } else {
+                errors++;
+            }
+        }
+        // Extra chars beyond sentence = errors
+        if (typed.length > currentSentence.length) {
+            errors += typed.length - currentSentence.length;
+        }
+
+        const accuracy = typed.length > 0 ? Math.round((correct / typed.length) * 100) : 100;
+        const netWpm = Math.max(0, Math.round(rawWpm * (accuracy / 100)));
+
+        return { rawWpm, netWpm, accuracy, errors };
+    }
+
+    // ─── Join Flow ───────────────────────────────────
+    function doJoin() {
+        initAudio();
+        const username = DOM.inputUsername.value.trim();
+        if (!username) {
+            DOM.joinError.textContent = 'Please enter a username';
+            DOM.joinError.classList.remove('hidden');
+            return;
+        }
+        myUsername = username;
+        DOM.joinError.classList.add('hidden');
+        send({ type: 'JOIN', username });
+    }
+
+    // ─── Play Again ──────────────────────────────────
+    function doPlayAgain() {
+        showScreen(DOM.screenJoin);
+        DOM.lobbyPlayers.classList.add('hidden');
+    }
+
+    // ─── Utility ─────────────────────────────────────
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    // ─── Event Bindings ──────────────────────────────
+    DOM.btnJoin.addEventListener('click', doJoin);
+    DOM.inputUsername.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') doJoin();
     });
-    document.getElementById('typing-input').addEventListener('input', onTyping);
-    showScreen('lobby-screen');
-});
+    DOM.typingInput.addEventListener('input', onTypingInput);
+    DOM.btnPlayAgain.addEventListener('click', doPlayAgain);
+
+    // Block paste in typing input
+    DOM.typingInput.addEventListener('paste', (e) => {
+        e.preventDefault();
+        showToast('Paste is disabled!', 'error', 1500);
+    });
+
+    // ─── Init ────────────────────────────────────────
+    connect();
+    showScreen(DOM.screenJoin);
+})();
