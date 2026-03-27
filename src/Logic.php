@@ -15,6 +15,7 @@ class Logic implements MessageComponentInterface
     {
         $this->clients = new \SplObjectStorage;
         require_once __DIR__ . '/db.php';
+        require_once __DIR__ . '/WordBank.php';
     }
 
     public function onOpen(ConnectionInterface $conn)
@@ -54,17 +55,11 @@ class Logic implements MessageComponentInterface
 
                 if ($id_room == null) {
                     $id_room = uniqid('rm_');
-                    $bank_kalimat = [
-                        'Pemrograman adalah seni memberi tahu komputer apa yang harus dilakukan langkah demi langkah.',
-                        'Sebuah perjalanan ribuan mil dimulai dengan satu langkah kecil ke depan.',
-                        'Kode yang bagus adalah kode yang bisa dibaca dan dipahami oleh manusia, bukan hanya mesin.',
-                        'Teknologi diciptakan untuk mempermudah hidup manusia, bukan untuk menggantikan peran manusia seutuhnya.'
-                    ];
                     
                     $this->rooms[$id_room] = [
                         'status' => 'lobby',
                         'mode' => $mode,
-                        'kalimat' => $bank_kalimat[array_rand($bank_kalimat)],
+                        'kalimat' => WordBank::getRandomWords(50),
                         'waktu_sisa' => 60,
                         'timer_loop' => null,
                         'players' => []
