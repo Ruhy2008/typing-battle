@@ -149,7 +149,7 @@
         showScreen(DOM.screenFinal);
     }
 
-    // ─── UI RENDERING (MONKEYTYPE STYLE) ─────────────
+    // ─── UI RENDERING  ─────────────
     function renderPlayerProgress(players) {
         let opponentsHtml = '';
         players.forEach(p => {
@@ -237,7 +237,7 @@
 
     function saveSessionData(standings) {
         try {
-            // ─── FITUR BARU: INGAT NAMA PEMILIK LAPTOP INI ───
+            // ─── FITUR INGAT NAMA PEMILIK LAPTOP ───
             localStorage.setItem('typingBattle_lastUser', myUsername);
             
             const raw = localStorage.getItem('typingBattle_sessions');
@@ -285,7 +285,7 @@
         alert('Dilarang copas curang!');
     });
 
-    // Auto-focus ketika area sentence di-klik
+    // Auto-focus ketika area sentence diklik
     DOM.sentenceDisplay.parentElement.addEventListener('click', () => {
         if (!DOM.typingInput.disabled) {
             DOM.typingInput.focus();

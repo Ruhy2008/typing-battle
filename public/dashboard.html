@@ -233,7 +233,7 @@ const RAILWAY_URL = 'wss://typing-battle-production.up.railway.app';
 const IS_LOCAL    = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
 const SERVER_URL  = IS_LOCAL ? 'ws://localhost:8080' : RAILWAY_URL;
 
-// Tema Chart.js ala Cyberpunk
+// Tema Chart.js
 Chart.defaults.color = '#64748b';
 Chart.defaults.font.family = "'Fira Code', monospace";
 Chart.defaults.scale.grid.color = 'rgba(0, 229, 255, 0.05)';
@@ -272,7 +272,7 @@ function init() {
     }
 }
 
-// ─── 1. HITUNG RINGKASAN (KHUSUS PEMILIK DEVICE) ───
+// ─── HITUNG RINGKASAN ───
 function calculateSummary(mySessions) {
     let allWpms = [];
     let totalMatch = mySessions.length;
@@ -305,7 +305,7 @@ function drawAnalysis(mySessions) {
     }
 }
 
-// ─── 2. RENDER CHARTS (PERSONAL) ───
+// ─── RENDER CHARTS  ───
 function drawTrendChart(mySessions) {
     const last5 = mySessions.slice(-5);
     const labels = last5.map((_, i) => `Match ${i+1}`);

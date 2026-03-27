@@ -74,7 +74,6 @@ class Logic implements MessageComponentInterface
                 $this->rooms[$id_room]['players'][$from->resourceId] = [
                     'conn' => $from, 'username' => $username, 'typedText' => '',
                     'progress' => 0, 'wpm' => 0, 'acc' => 100, 'selesai' => false, 'score' => 0,
-                    // VARIABEL BARU UNTUK MENGINGAT KESALAHAN
                     'total_errors' => 0, 
                     'last_length' => 0 
                 ];
@@ -125,17 +124,15 @@ class Logic implements MessageComponentInterface
                     $panjang_kalimat = strlen($kalimat);
                     
                     // ─── LOGIKA MENDETEKSI KESALAHAN PERMANEN ───
-                    // Jika teksnya bertambah panjang (pemain mengetik huruf baru, bukan menghapus)
                     if ($panjang_ketik > $player['last_length']) {
-                        $last_index = $panjang_ketik - 1; // Index huruf terakhir yang baru saja diketik
+                        $last_index = $panjang_ketik - 1; 
                         if ($last_index < $panjang_kalimat) {
                             if ($typed[$last_index] !== $kalimat[$last_index]) {
-                                $player['total_errors']++; // Catat dosanya!
+                                $player['total_errors']++;
                             }
                         }
                     }
-                    $player['last_length'] = $panjang_ketik; // Ingat panjang ketikan saat ini
-
+                    $player['last_length'] = $panjang_ketik; 
                     // ─── Hitung WPM (Berdasarkan huruf benar) ───
                     $benar = 0;
                     $cek_len = min($panjang_ketik, $panjang_kalimat);

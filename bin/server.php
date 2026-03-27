@@ -38,7 +38,7 @@ $server = IoServer::factory(
         )
     ),
     $port,
-    '0.0.0.0'   // WAJIB: bind ke semua interface agar Railway bisa akses
+    '0.0.0.0'   //Untuk ngebind ke semua interface agar Railway bisa akses
 );
 
 echo "===================================\n";

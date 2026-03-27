@@ -1,5 +1,5 @@
 <?php
-// src/db.php — Koneksi MySQL PDO (Adam)
+
 
 function getDB(): ?PDO {
     static $pdo = null;
@@ -29,9 +29,7 @@ function getDB(): ?PDO {
     }
 }
 
-/**
- * Simpan hasil satu ronde ke round_logs
- */
+/* Simpan hasil satu ronde ke round_logs*/
 function saveRoundLog(string $sessionId, int $roundNum, string $username, float $wpm, float $errorRate, float $timeSec, string $sentence): void {
     $pdo = getDB();
     if (!$pdo) return;
@@ -54,9 +52,7 @@ function saveRoundLog(string $sessionId, int $roundNum, string $username, float 
     }
 }
 
-/**
- * Update / insert statistik akumulatif pemain
- */
+/*Update / insert statistik akumulatif pemain*/
 function upsertPlayerStats(string $username, int $score, float $wpm, float $errorRate, float $bestWpm): void {
     $pdo = getDB();
     if (!$pdo) return;
@@ -83,9 +79,7 @@ function upsertPlayerStats(string $username, int $score, float $wpm, float $erro
     }
 }
 
-/**
- * Ambil leaderboard top 10
- */
+/* Ambil leaderboard top 10*/
 function getLeaderboard(): array {
     $pdo = getDB();
     if (!$pdo) return [];
