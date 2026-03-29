@@ -32,7 +32,8 @@ class Logic implements MessageComponentInterface
         switch ($data['type']) {
             case 'GET_LEADERBOARD':
                 try {
-                    $board = getLeaderboard(); 
+                    
+                    $board = \getLeaderboard(); 
                     $from->send(json_encode([
                         'type' => 'LEADERBOARD',
                         'data' => $board
@@ -128,6 +129,7 @@ class Logic implements MessageComponentInterface
                         }
                     }
                     $player['last_length'] = $panjang_ketik; 
+                    
                     // ─── Hitung WPM (Berdasarkan huruf benar) ───
                     $benar = 0;
                     $cek_len = min($panjang_ketik, $panjang_kalimat);
@@ -251,10 +253,12 @@ class Logic implements MessageComponentInterface
             // HANYA SIMPAN KE DB JIKA MODE MULTIPLAYER
             if ($room['mode'] === 'multi') {
                 try {
-                    upsertPlayerStats($p['username'], $skor_akhir, $wpm, $errorRate, $wpm);
+                    // ─── PERBAIKAN: Tambah \ di depan upsertPlayerStats ───
+                    \upsertPlayerStats($p['username'], $skor_akhir, $wpm, $errorRate, $wpm);
                     
                     $waktu_terpakai = 60 - $room['waktu_sisa'];
-                    saveRoundLog($id_room, 1, $p['username'], $wpm, $errorRate, $waktu_terpakai, $room['kalimat']);
+                    // ─── PERBAIKAN: Tambah \ di depan saveRoundLog ───
+                    \saveRoundLog($id_room, 1, $p['username'], $wpm, $errorRate, $waktu_terpakai, $room['kalimat']);
                 } catch (\Exception $e) { }
             }
         }
